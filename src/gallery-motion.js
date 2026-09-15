@@ -32,6 +32,8 @@ const fragmentShader = /* glsl */ `
   uniform float start;
   uniform float time;
   uniform float dispersion;
+  uniform vec2 viewport;
+  uniform vec2 maskEdges;
   varying vec2 sheet;
   varying vec3 viewPosition;
   void main() {
@@ -58,6 +60,9 @@ const fragmentShader = /* glsl */ `
     vec4 color = vec4(mix(base.rgb, vec3(red.r, base.g, blue.b), min(red.a, blue.a)), base.a);
     vec3 normal = normalize(cross(dFdx(viewPosition), dFdy(viewPosition)));
     color.rgb *= .85 + .15 * abs(normal.z);
+    // Fade only the paper itself at the heading; the sea/light stays continuous.
+    float screenY = viewport.x - gl_FragCoord.y / viewport.y;
+    color.a *= smoothstep(maskEdges.x, maskEdges.y, screenY);
     gl_FragColor = color;
     #include <colorspace_fragment>
   }
@@ -119,6 +124,8 @@ export class GalleryMotion {
         start: { value: 330 },
         time: { value: 0 },
         dispersion: { value: 0.32 },
+        viewport: { value: new THREE.Vector2(1, 1) },
+        maskEdges: { value: new THREE.Vector2(235, 315) },
         range: { value: new THREE.Vector2(-2600, 1200) },
       },
     });
@@ -418,6 +425,14 @@ export class GalleryMotion {
       .copy(this.camera.projectionMatrix)
       .invert();
     this.renderer.setSize(this.width, this.height);
+    this.material.uniforms.viewport.value.set(
+      this.height,
+      this.renderer.getPixelRatio(),
+    );
+    this.material.uniforms.maskEdges.value.set(
+      this.mobile ? 184 : 235,
+      this.mobile ? 244 : 315,
+    );
     this.material.uniforms.start.value = this.start;
     this.material.uniforms.range.value.set(this.minimum, this.maximum);
     if (this.ready) {
@@ -477,7 +492,7 @@ export class GalleryMotion {
         ).backgroundColor;
         ctx.fillRect(x, y, cardWidth, imageHeight);
       }
-      ctx.fillStyle = "#292524";
+      ctx.fillStyle = "#eaf9f5";
       ctx.textBaseline = "top";
       ctx.font = '500 18px "DM Sans"';
       ctx.fillText(
@@ -495,7 +510,7 @@ export class GalleryMotion {
       );
       ctx.font = '400 24px "DM Sans"';
       ctx.fillText("↗", x + cardWidth - 23, y + imageHeight + 20);
-      ctx.strokeStyle = "rgba(41,37,36,.28)";
+      ctx.strokeStyle = "rgba(215,244,242,.42)";
       ctx.lineWidth = 0.7;
       ctx.beginPath();
       ctx.moveTo(x, y + imageHeight + 66);

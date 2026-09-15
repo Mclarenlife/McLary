@@ -63,7 +63,10 @@ function showPage(updateScene = true) {
   main.className = "page " + route;
   document.body.classList.toggle("work-view", route === "work");
   document.documentElement.classList.toggle("work-view", route === "work");
-  document.body.classList.toggle("dark-header", route === "playground");
+  document.body.classList.toggle(
+    "dark-header",
+    route === "playground" || route === "work",
+  );
   document
     .querySelectorAll(".nav>a")
     .forEach((a) =>

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { Water } from "three/addons/objects/Water.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { OceanScene, oceanView } from "./ocean-scene.js";
+import { UnderwaterScene } from "./underwater-scene.js";
 import { profile } from "./content.js";
 import gsap from "gsap";
 import { WaterMotion } from "./water-motion.js";
@@ -23,39 +24,6 @@ function texture(size, sample) {
   t.generateMipmaps = true;
   t.needsUpdate = true;
   return t;
-}
-
-function archWall(width, height, openings) {
-  const shape = new THREE.Shape();
-  shape.moveTo(-width / 2, 0);
-  shape.lineTo(width / 2, 0);
-  shape.lineTo(width / 2, height);
-  shape.lineTo(-width / 2, height);
-  shape.closePath();
-  for (const { x, w, h, y = 0.02, arch = true } of openings) {
-    const hole = new THREE.Path(),
-      left = x - w / 2,
-      right = x + w / 2;
-    hole.moveTo(left, y);
-    hole.lineTo(left, y + h - (arch ? w / 2 : 0));
-    if (arch) hole.absarc(x, y + h - w / 2, w / 2, Math.PI, 0, true);
-    else {
-      hole.lineTo(left, y + h);
-      hole.lineTo(right, y + h);
-    }
-    hole.lineTo(right, y);
-    hole.closePath();
-    shape.holes.push(hole);
-  }
-  return new THREE.ExtrudeGeometry(shape, {
-    depth: 0.7,
-    bevelEnabled: true,
-    bevelThickness: 0.045,
-    bevelSize: 0.045,
-    bevelSegments: 2,
-    steps: 1,
-    curveSegments: 40,
-  });
 }
 
 export class PortfolioScene {
@@ -163,54 +131,8 @@ export class PortfolioScene {
       this.camera,
       this.water,
     );
-    this.galleryRoom = new THREE.Group();
-    this.galleryRoom.visible = false;
-    this.scene.add(this.galleryRoom);
-    const galleryPlaster = new THREE.MeshStandardMaterial({
-      color: "#e2e1e7",
-      roughness: 0.72,
-      metalness: 0.12,
-    });
-    for (const side of [-1, 1]) {
-      const portal = new THREE.Mesh(
-        archWall(8, 15, [{ x: 0, w: 4.6, h: 11 }]),
-        galleryPlaster,
-      );
-      portal.position.set(side * 13.5, -0.1, -8);
-      portal.rotation.y = -side * 0.32;
-      portal.castShadow = portal.receiveShadow = true;
-      this.galleryRoom.add(portal);
-    }
-    const paperMaterial = new THREE.MeshPhysicalMaterial({
-      color: "#e0dae8",
-      metalness: 0.86,
-      roughness: 0.17,
-      iridescence: 1,
-      side: THREE.DoubleSide,
-    });
-    this.floatingPages = [];
-    for (let i = 0; i < 42; i++) {
-      const geometry = new THREE.PlaneGeometry(
-        0.25 + (i % 3) * 0.12,
-        0.16 + (i % 4) * 0.05,
-        5,
-        7,
-      );
-      const pos = geometry.attributes.position;
-      for (let v = 0; v < pos.count; v++)
-        pos.setZ(v, Math.sin(pos.getY(v) * 10) * 0.1);
-      geometry.computeVertexNormals();
-      const paper = new THREE.Mesh(geometry, paperMaterial);
-      paper.position.set(
-        Math.sin(i * 73.1) * 13,
-        2 + (i % 12) * 1.1,
-        -12 + Math.cos(i * 23.7) * 5,
-      );
-      paper.rotation.set(i, i * 0.7, i * 0.4);
-      paper.userData.baseY = paper.position.y;
-      this.galleryRoom.add(paper);
-      this.floatingPages.push(paper);
-    }
+    this.underwater = new UnderwaterScene();
+    this.scene.add(this.underwater.group);
     const metal = new THREE.MeshStandardMaterial({
       color: "#c5abb4",
       metalness: 0.8,
@@ -246,6 +168,7 @@ export class PortfolioScene {
       this.renderer.setSize(innerWidth, innerHeight);
       this.waterMotion.resize(innerWidth, innerHeight);
       this.ocean.setLayout(innerWidth < 650);
+      this.underwater.resize();
       if (this.page) this.setPage(this.page, true);
     };
     addEventListener("resize", this.resize);
@@ -257,9 +180,16 @@ export class PortfolioScene {
       if (
         this.entered &&
         !this.reduced &&
-        !e.target.closest("a,button,.menu,.dialog,.work")
+        !e.target.closest("a,button,.menu,.dialog,.intro")
       ) {
-        this.waterMotion.disturb(e.clientX, e.clientY);
+        if (this.page === "work") {
+          if (!this.waterMotion.push.pass.enabled)
+            this.underwater.bubbles.emit(
+              e.clientX,
+              e.clientY,
+              this.waterMotion.time,
+            );
+        } else this.waterMotion.disturb(e.clientX, e.clientY);
       }
       if (this.dragging) {
         this.dragOffset = THREE.MathUtils.clamp(
@@ -272,7 +202,7 @@ export class PortfolioScene {
     };
     addEventListener("pointermove", this.onMove);
     container.addEventListener("pointerdown", (e) => {
-      if (this.entered && !this.reduced)
+      if (this.entered && !this.reduced && this.page !== "work")
         this.waterMotion.disturb(e.clientX, e.clientY, true);
       if (this.page === "playground") {
         this.dragging = true;
@@ -299,11 +229,14 @@ export class PortfolioScene {
     await document.fonts.ready;
     this.ocean.prepare(this.renderer);
     const visible = this.ocean.group.visible;
+    const underwaterVisible = this.underwater.group.visible;
     this.ocean.group.visible = true;
+    this.underwater.group.visible = true;
     try {
       await this.renderer.compileAsync(this.scene, this.camera);
     } finally {
       this.ocean.group.visible = visible;
+      this.underwater.group.visible = underwaterVisible;
     }
   }
   box(size, position, material, parent = this.scene) {
@@ -348,9 +281,10 @@ export class PortfolioScene {
         ? { x: 0, y: 4, z: 13, tx: 0, ty: 3.5, tz: 0 }
         : { x: 0, y: 6.2, z: 20, tx: 0, ty: 6, tz: -9 };
     this.play.visible = page === "playground";
-    this.galleryRoom.visible = page === "work";
+    this.underwater.setActive(page === "work");
+    this.water.visible = page !== "work";
     this.ocean.group.visible = oceanPage;
-    this.particles.visible = !oceanPage;
+    this.particles.visible = page === "playground";
     this.scene.fog.color.set(oceanPage ? "#d7e3e1" : "#e1e1e5");
     this.water.material.uniforms.waterColor.value.set(
       oceanPage ? "#5798a8" : "#8c839d",
@@ -378,7 +312,7 @@ export class PortfolioScene {
         page === "playground"
           ? "#252431"
           : page === "work"
-            ? "#e1e1e5"
+            ? "#0c5268"
             : "#d9d7e4",
       ),
       duration: this.reduced || immediate ? 0 : 0.4,
@@ -444,12 +378,17 @@ export class PortfolioScene {
     this.particles.rotation.y = t * 0.009 * motion;
     this.sculpture.rotation.y = t * 0.18 * motion + this.dragOffset;
     this.sculpture.rotation.z = Math.sin(t * 0.21) * 0.12 * motion;
-    this.floatingPages.forEach((paper, i) => {
-      paper.position.y =
-        paper.userData.baseY + Math.sin(t * 0.45 + i) * 0.24 * motion;
-      paper.rotation.y = i * 0.7 + t * 0.15 * motion;
-    });
     this.smoothPointer.lerp(this.pointer, 1 - Math.exp(-4 * delta));
+    const bubblesActive =
+      this.page === "work" &&
+      this.entered &&
+      !this.reduced &&
+      !document.body.classList.contains("menu-open") &&
+      !document.querySelector("dialog[open]") &&
+      !this.waterMotion.push.pass.enabled;
+    this.underwater.bubbles.setActive(bubblesActive);
+    if (this.underwater.group.visible)
+      this.underwater.update(t, delta, this.smoothPointer);
     const mobile = innerWidth < 650,
       parallax = mobile ? 0 : (6 - this.contactMix.value * 5.65) * motion;
     this.camera.position.set(
@@ -486,6 +425,12 @@ export class PortfolioScene {
         .enabled
         ? "elastic"
         : "camera";
+      this.renderer.domElement.dataset.underwater = String(
+        this.underwater.group.visible,
+      );
+      this.underwater.bubbles.canvas.dataset.count = String(
+        this.underwater.bubbles.items.length,
+      );
     }
     this.waterMotion.render();
   }
