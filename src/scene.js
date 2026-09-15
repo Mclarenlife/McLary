@@ -9,7 +9,7 @@ import gsap from "gsap";
 import { WaterMotion } from "./water-motion.js";
 
 // Scene geometry and interaction are authored for this project. The gallery's
-// bundled NASA Earth texture and geographic data are credited in public/earth.
+// bundled geographic data is credited in public/earth.
 // No remote models, shaders, imagery or fonts are loaded at runtime.
 function texture(size, sample) {
   const data = new Uint8Array(size * size * 4);
@@ -154,6 +154,14 @@ export class PortfolioScene {
         e.clientY / innerHeight - 0.5,
       );
       if (
+        this.page === "gallery" &&
+        e.pointerType !== "touch" &&
+        !this.dragging &&
+        !e.target.closest("a,button,.menu,.dialog,.intro")
+      ) {
+        this.photoGallery.setPointer(e.clientX, e.clientY);
+      } else this.photoGallery.clearPointer();
+      if (
         this.entered &&
         !this.reduced &&
         !e.target.closest("a,button,.menu,.dialog,.intro")
@@ -178,6 +186,10 @@ export class PortfolioScene {
       }
     };
     addEventListener("pointermove", this.onMove);
+    document.addEventListener("pointerleave", () =>
+      this.photoGallery.clearPointer(),
+    );
+    addEventListener("blur", () => this.photoGallery.clearPointer());
     container.addEventListener("pointerdown", (e) => {
       if (
         this.entered &&
@@ -186,6 +198,11 @@ export class PortfolioScene {
       )
         this.waterMotion.disturb(e.clientX, e.clientY, true);
       if (this.page === "gallery") {
+        this.galleryClickPhoto = this.photoGallery.pick(
+          e.clientX,
+          e.clientY,
+          this.camera,
+        );
         this.dragging = true;
         this.lastX = e.clientX;
         this.galleryPointerDown = { x: e.clientX, y: e.clientY };
@@ -202,10 +219,18 @@ export class PortfolioScene {
           e.clientY - this.galleryPointerDown.y,
         ) < 5
       ) {
-        const id = this.photoGallery.pick(e.clientX, e.clientY, this.camera);
+        const id =
+          this.galleryClickPhoto ||
+          this.photoGallery.pick(e.clientX, e.clientY, this.camera);
         if (id) this.onPhotoSelect?.(id);
       }
       this.dragging = false;
+      if (
+        this.page === "gallery" &&
+        e.pointerType !== "touch" &&
+        !e.target.closest("a,button,.menu,.dialog,.intro")
+      )
+        this.photoGallery.setPointer(e.clientX, e.clientY);
     });
     addEventListener("pointercancel", () => {
       this.dragging = false;
@@ -288,6 +313,7 @@ export class PortfolioScene {
           )
         : { x: 0, y: 6.2, z: 20, tx: 0, ty: 6, tz: -9 };
     this.photoGallery.group.visible = page === "gallery";
+    this.photoGallery.clearPointer();
     if (enteringGallery) this.photoGallery.select("all", true);
     this.camera.near = 0.1;
     this.camera.far = page === "gallery" ? 80 : 800;
@@ -295,7 +321,7 @@ export class PortfolioScene {
     this.underwater.setActive(page === "work");
     this.water.visible = !["work", "gallery"].includes(page);
     this.ocean.group.visible = oceanPage;
-    this.particles.visible = page === "gallery";
+    this.particles.visible = false;
     this.scene.fog.color.set(oceanPage ? "#d7e3e1" : "#e1e1e5");
     this.water.material.uniforms.waterColor.value.set(
       oceanPage ? "#5798a8" : "#8c839d",
@@ -321,7 +347,7 @@ export class PortfolioScene {
     gsap.to(this.scene.background, {
       ...new THREE.Color(
         page === "gallery"
-          ? "#08151f"
+          ? "#050709"
           : page === "work"
             ? "#0c5268"
             : "#d9d7e4",
@@ -427,8 +453,18 @@ export class PortfolioScene {
         this.camera.updateProjectionMatrix();
       }
     }
-    if (inGallery)
-      this.photoGallery.update(t, this.camera, motion, this.dragOffset);
+    if (inGallery) {
+      this.photoGallery.interactionEnabled =
+        this.entered &&
+        !this.dragging &&
+        !document.body.classList.contains("menu-open") &&
+        !document.querySelector("dialog[open]") &&
+        !this.waterMotion.push.pass.enabled;
+      this.photoGallery.update(t, this.camera, motion, this.dragOffset, delta);
+      this.renderer.domElement.style.cursor = this.photoGallery.hovered
+        ? "pointer"
+        : "grab";
+    } else this.renderer.domElement.style.cursor = "";
     if (this.page === "contact")
       this.onContactFrame?.(
         this.ocean.emailBounds(this.camera, innerWidth, innerHeight),
@@ -456,6 +492,12 @@ export class PortfolioScene {
       this.renderer.domElement.dataset.globeReady = String(
         this.photoGallery.ready,
       );
+      this.renderer.domElement.dataset.photoHover =
+        this.photoGallery.hovered || "";
+      this.renderer.domElement.dataset.orbitAngle =
+        this.photoGallery.orbitAngle.toFixed(4);
+      this.renderer.domElement.dataset.mapScale =
+        this.photoGallery.material.uniforms.magnification.value.toFixed(6);
       this.renderer.domElement.dataset.visitor =
         this.underwater.visitors.creatures
           .filter((v) => v.visible)

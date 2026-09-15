@@ -120,9 +120,11 @@ function showPage(updateScene = true) {
           scene?.setPlace(p.id);
         }),
     );
-    main
-      .querySelectorAll("[data-photo]")
-      .forEach((b) => (b.onclick = () => openPhoto(b.dataset.photo)));
+    main.querySelectorAll("[data-photo]").forEach((b) => {
+      b.onclick = () => openPhoto(b.dataset.photo);
+      b.onfocus = () => scene?.photoGallery.focusPhoto(b.dataset.photo);
+      b.onblur = () => scene?.photoGallery.focusPhoto(null);
+    });
     if (sceneUnavailable) main.classList.add("gallery-fallback");
   } else
     main.innerHTML =

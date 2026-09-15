@@ -91,31 +91,6 @@ export class OceanAtmosphere {
     fog.rotation.x = -Math.PI / 2;
     fog.position.set(0, 0.5, -75);
     this.group.add(fog);
-    for (let i = 0; i < 3; i++) {
-      const beam = new THREE.Mesh(
-        new THREE.PlaneGeometry(9 + i * 3, 52),
-        new THREE.ShaderMaterial({
-          uniforms: { time: this.time, phase: { value: i * 2.4 } },
-          transparent: true,
-          depthWrite: false,
-          side: THREE.DoubleSide,
-          blending: THREE.AdditiveBlending,
-          vertexShader: vertex,
-          fragmentShader: /* glsl */ `
-          uniform float time; uniform float phase; varying vec2 vUv;
-          void main(){
-            float x=(vUv.x-.5)/(.25+.75*(1.-vUv.y));
-            float shaft=exp(-x*x*12.)*sin(vUv.y*3.14159);
-            float shimmer=.72+.28*sin(vUv.y*9.-time*.3+phase);
-            gl_FragColor=vec4(1.,.89,.65,shaft*shimmer*.16);
-          }
-        `,
-        }),
-      );
-      beam.position.set(-21 + i * 7, 19, -77 - i * 7);
-      beam.rotation.z = -0.37 + i * 0.06;
-      this.group.add(beam);
-    }
     this.gulls = [];
     const white = new THREE.MeshStandardMaterial({
       color: "#faf9ef",

@@ -777,10 +777,10 @@ body.work-view header {
   opacity: 0.55;
 }
 .gallery {
-  color: #f3e9e3;
+  color: #e8eaec;
 }
 .gallery-view #scene {
-  background: radial-gradient(ellipse at center, #18303d, #08151f 70%);
+  background: #050709;
 }
 .gallery .play-title {
   pointer-events: none;

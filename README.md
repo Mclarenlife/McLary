@@ -39,11 +39,11 @@ For photography, edit `src/photography.js`. The requested initial state contains
 
 ## Photography and living environments
 
-The photography globe opens with China facing the viewer. Selecting a place turns the same globe toward that region and moves the perspective camera closer over 2.4 seconds. Guangdong and Shanxi use geoBoundaries polygons; Macau uses Natural Earth coastline geometry. Camera distance is fitted to each geographic extent and the viewport. A dynamic near clipping plane supports both the full Earth and Macau close-up without frame depth artifacts. The selected boundary is illuminated, other frames withdraw, and selecting 全部 restores the complete globe and orbiting frames. Mouse, keyboard frame buttons and accessible dialogs are supported. Reduced motion makes the selection immediate and stops autonomous motion.
+The photography globe opens with China facing the viewer: grey land, black dotted oceans and fine pale country borders. Selecting a place rotates an angular map lens within the same fixed-size sphere, with soft fading edges and a white region highlight. The camera does not move closer. Local coastlines retain enough detail for Macau. Guangdong and Shanxi use geoBoundaries polygons; world countries and Macau use Natural Earth geometry. Small photographs orbit in planes tangent to the globe; hovering pauses the orbit and draws that frame toward the camera while enlarging it, and leaving restores the orbit. Filtering retains the same orbit for matching frames. Three passing planets, stars, a satellite and a small space station complete the scene. Mouse, keyboard frame buttons and accessible dialogs are supported. Reduced motion makes selection immediate and stops autonomous motion.
 
-The home scene has six separately seeded volume clouds, limb shading and a warm corona around the sun, moving low sea mist, three soft light shafts and three animated gulls. Underwater light shafts bend and pulse in response to layered water waves. A whale, shark and turtle pass on an 86-second cycle with quiet intervals; their movement pauses with reduced motion. A restrained diagonal sheen crosses project photographs without changing caption colours.
+The home scene has six separately seeded volume clouds, limb shading and a warm corona around the sun, moving low sea mist and three animated gulls. Underwater light shafts bend and pulse in response to layered water waves. A whale, shark and turtle pass on an 86-second cycle with quiet intervals; their movement pauses with reduced motion. A restrained diagonal sheen crosses project photographs without changing caption colours.
 
-The Earth image is NASA Blue Marble. Geographic dataset sources and usage credits are bundled at `public/earth/CREDITS.txt`. All assets load from the same website; the visitor's browser does not contact a map or image service.
+The monochrome map is drawn from bundled geographic geometry. Dataset sources and usage credits are in `public/earth/CREDITS.txt`. All assets load from the same website; the visitor's browser does not contact a map or image service. `scripts/prepare-world-map.mjs` refreshes the simplified world boundaries and detailed regional coastlines from Natural Earth.
 
 ## Source structure
 
@@ -52,9 +52,11 @@ The Earth image is NASA Blue Marble. Geographic dataset sources and usage credit
 | `src/main.js`             | Navigation, filters, project dialogs, keyboard handling, synthesized audio              |
 | `src/scene.js`            | Scene routing, perspective camera, lighting, reflected water and photography environment     |
 | `src/ocean-scene.js`     | Procedural sky, sun, clouds, boat, deforming sail and contact ink |
-| `src/ocean-atmosphere.js` | Distinct volume clouds, low mist, light shafts and three gulls |
+| `src/ocean-atmosphere.js` | Distinct volume clouds, low mist and three gulls |
 | `src/sea-visitors.js` | Infrequent animated whale, shark and turtle passages |
-| `src/photo-globe.js` | Geographic globe orientation, region highlights, camera fitting and orbiting frames |
+| `src/photo-globe.js` | Fixed globe, internal region lens, tangential frame orbit and hover approach |
+| `src/globe-surface.js` | Geographic atlases, dotted ocean shader, country borders and soft edge mask |
+| `src/space-decor.js` | Stars, passing planets, satellite and space station |
 | `src/photography.js` | Photography places and user-editable empty frame entries |
 | `src/underwater-scene.js` | Underwater light shafts, surface shimmer, instanced swimming fish and bounded pointer bubbles |
 | `src/scene-push.js`       | Two-background, direction-aware compression and elastic scene replacement               |
@@ -89,7 +91,7 @@ Run `node scripts/check-ocean.mjs` to check desktop/mobile home placement, conta
 
 Run `node scripts/check-underwater.mjs` to check the bubble pool limit, upward drift, expiry, route cleanup, fish movement and responsive sizing.
 
-Run `node scripts/check-gallery.mjs` to check geographic orientation, desktop/mobile region fitting, camera clearance, empty frames and the large-creature schedule.
+Run `node scripts/check-gallery.mjs` to check the fixed sphere, regional lens fit, tangent orientation, raycast hover/pause/approach/return, reduced motion, frame-rate independence and empty frames.
 
 ## Accessibility and resilience
 
