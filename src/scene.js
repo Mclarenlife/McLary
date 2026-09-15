@@ -3,11 +3,13 @@ import { Water } from "three/addons/objects/Water.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { OceanScene, oceanView } from "./ocean-scene.js";
 import { UnderwaterScene } from "./underwater-scene.js";
+import { PhotoGlobe } from "./photo-globe.js";
 import { profile } from "./content.js";
 import gsap from "gsap";
 import { WaterMotion } from "./water-motion.js";
 
-// All geometry, materials and textures below are authored for this project.
+// Scene geometry and interaction are authored for this project. The gallery's
+// bundled NASA Earth texture and geographic data are credited in public/earth.
 // No remote models, shaders, imagery or fonts are loaded at runtime.
 function texture(size, sample) {
   const data = new Uint8Array(size * size * 4);
@@ -133,34 +135,8 @@ export class PortfolioScene {
     );
     this.underwater = new UnderwaterScene();
     this.scene.add(this.underwater.group);
-    const metal = new THREE.MeshStandardMaterial({
-      color: "#c5abb4",
-      metalness: 0.8,
-      roughness: 0.27,
-    });
-    this.play = new THREE.Group();
-    this.play.visible = false;
-    this.scene.add(this.play);
-    const sculptMat = new THREE.MeshPhysicalMaterial({
-      color: "#ccb9e1",
-      metalness: 0.6,
-      roughness: 0.2,
-      iridescence: 1,
-      clearcoat: 1,
-    });
-    this.sculpture = new THREE.Mesh(
-      new THREE.TorusKnotGeometry(2, 0.55, 160, 28, 2, 3),
-      sculptMat,
-    );
-    this.sculpture.position.set(0, 3.5, 0);
-    this.play.add(this.sculpture);
-    const orbit = new THREE.Mesh(
-      new THREE.TorusGeometry(4.1, 0.02, 8, 128),
-      metal,
-    );
-    orbit.position.y = 3.5;
-    orbit.rotation.x = Math.PI / 2;
-    this.play.add(orbit);
+    this.photoGallery = new PhotoGlobe();
+    this.scene.add(this.photoGallery.group);
     this.addParticles();
     this.resize = () => {
       this.camera.aspect = innerWidth / innerHeight;
@@ -189,7 +165,8 @@ export class PortfolioScene {
               e.clientY,
               this.waterMotion.time,
             );
-        } else this.waterMotion.disturb(e.clientX, e.clientY);
+        } else if (this.page !== "gallery")
+          this.waterMotion.disturb(e.clientX, e.clientY);
       }
       if (this.dragging) {
         this.dragOffset = THREE.MathUtils.clamp(
@@ -202,15 +179,32 @@ export class PortfolioScene {
     };
     addEventListener("pointermove", this.onMove);
     container.addEventListener("pointerdown", (e) => {
-      if (this.entered && !this.reduced && this.page !== "work")
+      if (
+        this.entered &&
+        !this.reduced &&
+        !["work", "gallery"].includes(this.page)
+      )
         this.waterMotion.disturb(e.clientX, e.clientY, true);
-      if (this.page === "playground") {
+      if (this.page === "gallery") {
         this.dragging = true;
         this.lastX = e.clientX;
+        this.galleryPointerDown = { x: e.clientX, y: e.clientY };
         container.setPointerCapture(e.pointerId);
       }
     });
-    addEventListener("pointerup", () => {
+    addEventListener("pointerup", (e) => {
+      if (
+        this.dragging &&
+        this.page === "gallery" &&
+        this.galleryPointerDown &&
+        Math.hypot(
+          e.clientX - this.galleryPointerDown.x,
+          e.clientY - this.galleryPointerDown.y,
+        ) < 5
+      ) {
+        const id = this.photoGallery.pick(e.clientX, e.clientY, this.camera);
+        if (id) this.onPhotoSelect?.(id);
+      }
       this.dragging = false;
     });
     addEventListener("pointercancel", () => {
@@ -228,15 +222,24 @@ export class PortfolioScene {
   async prepare() {
     await document.fonts.ready;
     this.ocean.prepare(this.renderer);
+    await this.photoGallery.prepare(this.renderer);
     const visible = this.ocean.group.visible;
     const underwaterVisible = this.underwater.group.visible;
+    const galleryVisible = this.photoGallery.group.visible;
     this.ocean.group.visible = true;
     this.underwater.group.visible = true;
+    this.photoGallery.group.visible = true;
+    // Rare visitors are also compiled now, not when their first pass begins.
+    const visitors = this.underwater.visitors.creatures;
+    const visitorVisibility = visitors.map((v) => v.visible);
+    visitors.forEach((v) => (v.visible = true));
     try {
       await this.renderer.compileAsync(this.scene, this.camera);
     } finally {
       this.ocean.group.visible = visible;
       this.underwater.group.visible = underwaterVisible;
+      this.photoGallery.group.visible = galleryVisible;
+      visitors.forEach((v, i) => (v.visible = visitorVisibility[i]));
     }
   }
   box(size, position, material, parent = this.scene) {
@@ -272,19 +275,27 @@ export class PortfolioScene {
       !immediate
     )
       return;
+    const enteringGallery = page === "gallery" && this.page !== page;
     this.page = page;
     this.dragOffset = 0;
     const oceanPage = page === "index" || page === "contact";
     const target = oceanPage
       ? oceanView(page === "contact", innerWidth < 650)
-      : page === "playground"
-        ? { x: 0, y: 4, z: 13, tx: 0, ty: 3.5, tz: 0 }
+      : page === "gallery"
+        ? this.photoGallery.view(
+            enteringGallery ? "all" : this.photoGallery.selected,
+            innerWidth < 650,
+          )
         : { x: 0, y: 6.2, z: 20, tx: 0, ty: 6, tz: -9 };
-    this.play.visible = page === "playground";
+    this.photoGallery.group.visible = page === "gallery";
+    if (enteringGallery) this.photoGallery.select("all", true);
+    this.camera.near = 0.1;
+    this.camera.far = page === "gallery" ? 80 : 800;
+    this.camera.updateProjectionMatrix();
     this.underwater.setActive(page === "work");
-    this.water.visible = page !== "work";
+    this.water.visible = !["work", "gallery"].includes(page);
     this.ocean.group.visible = oceanPage;
-    this.particles.visible = page === "playground";
+    this.particles.visible = page === "gallery";
     this.scene.fog.color.set(oceanPage ? "#d7e3e1" : "#e1e1e5");
     this.water.material.uniforms.waterColor.value.set(
       oceanPage ? "#5798a8" : "#8c839d",
@@ -309,8 +320,8 @@ export class PortfolioScene {
     });
     gsap.to(this.scene.background, {
       ...new THREE.Color(
-        page === "playground"
-          ? "#252431"
+        page === "gallery"
+          ? "#08151f"
           : page === "work"
             ? "#0c5268"
             : "#d9d7e4",
@@ -351,20 +362,16 @@ export class PortfolioScene {
         ease: "elastic.out(1,0.58)",
       });
   }
-  setSculpture(type) {
-    const geo =
-      type === "orbit"
-        ? new THREE.TorusGeometry(2, 0.58, 48, 120)
-        : type === "bloom"
-          ? new THREE.TorusKnotGeometry(1.65, 0.5, 160, 32, 3, 5)
-          : new THREE.TorusKnotGeometry(2, 0.55, 160, 28, 2, 3);
-    this.sculpture.geometry.dispose();
-    this.sculpture.geometry = geo;
-    gsap.fromTo(
-      this.sculpture.scale,
-      { x: 0.01, y: 0.01, z: 0.01 },
-      { x: 1, y: 1, z: 1, duration: 0.8, ease: "back.out(1.4)" },
-    );
+  setPlace(id) {
+    this.dragOffset = 0;
+    this.photoGallery.select(id, this.reduced);
+    const target = this.photoGallery.view(id, innerWidth < 650);
+    gsap.to(this.view, {
+      ...target,
+      duration: this.reduced ? 0 : 2.4,
+      ease: "power3.inOut",
+      overwrite: true,
+    });
   }
   render() {
     if (document.hidden) return;
@@ -376,8 +383,6 @@ export class PortfolioScene {
     this.water.material.uniforms.time.value = t * 0.45;
     if (this.ocean.group.visible) this.ocean.update(t, motion);
     this.particles.rotation.y = t * 0.009 * motion;
-    this.sculpture.rotation.y = t * 0.18 * motion + this.dragOffset;
-    this.sculpture.rotation.z = Math.sin(t * 0.21) * 0.12 * motion;
     this.smoothPointer.lerp(this.pointer, 1 - Math.exp(-4 * delta));
     const bubblesActive =
       this.page === "work" &&
@@ -388,23 +393,42 @@ export class PortfolioScene {
       !this.waterMotion.push.pass.enabled;
     this.underwater.bubbles.setActive(bubblesActive);
     if (this.underwater.group.visible)
-      this.underwater.update(t, delta, this.smoothPointer);
+      this.underwater.update(t, delta * motion, this.smoothPointer);
     const mobile = innerWidth < 650,
-      parallax = mobile ? 0 : (6 - this.contactMix.value * 5.65) * motion;
+      inGallery = this.page === "gallery",
+      parallax = mobile
+        ? 0
+        : (inGallery
+            ? Math.min(0.9, (this.view.z - this.view.tz) * 0.09)
+            : 6 - this.contactMix.value * 5.65) * motion;
     this.camera.position.set(
-      this.view.x + this.smoothPointer.x * parallax + this.dragOffset,
+      this.view.x +
+        this.smoothPointer.x * parallax +
+        (inGallery ? 0 : this.dragOffset),
       this.view.y - this.smoothPointer.y * parallax * 0.46,
-      this.view.z +
-        (mobile && this.page !== "index" && this.page !== "contact" ? 4 : 0),
+      this.view.z + (mobile && this.page === "work" ? 4 : 0),
     );
     this.camera.lookAt(
       this.view.tx +
-        this.dragOffset * 0.5 -
+        (inGallery ? 0 : this.dragOffset * 0.5) -
         this.smoothPointer.x * parallax * 0.13,
       this.view.ty + this.smoothPointer.y * parallax * 0.1,
       this.view.tz,
     );
     this.camera.rotateZ(-this.smoothPointer.x * parallax * 0.004);
+    if (inGallery) {
+      const near = THREE.MathUtils.clamp(
+        (this.view.z - this.view.tz) * 0.015,
+        0.00001,
+        0.1,
+      );
+      if (Math.abs(near - this.camera.near) > 0.000001) {
+        this.camera.near = near;
+        this.camera.updateProjectionMatrix();
+      }
+    }
+    if (inGallery)
+      this.photoGallery.update(t, this.camera, motion, this.dragOffset);
     if (this.page === "contact")
       this.onContactFrame?.(
         this.ocean.emailBounds(this.camera, innerWidth, innerHeight),
@@ -428,6 +452,15 @@ export class PortfolioScene {
       this.renderer.domElement.dataset.underwater = String(
         this.underwater.group.visible,
       );
+      this.renderer.domElement.dataset.place = this.photoGallery.selected;
+      this.renderer.domElement.dataset.globeReady = String(
+        this.photoGallery.ready,
+      );
+      this.renderer.domElement.dataset.visitor =
+        this.underwater.visitors.creatures
+          .filter((v) => v.visible)
+          .map((v) => v.userData.kind)
+          .join(",");
       this.underwater.bubbles.canvas.dataset.count = String(
         this.underwater.bubbles.items.length,
       );

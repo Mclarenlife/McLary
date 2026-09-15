@@ -60,6 +60,12 @@ const fragmentShader = /* glsl */ `
     vec4 color = vec4(mix(base.rgb, vec3(red.r, base.g, blue.b), min(red.a, blue.a)), base.a);
     vec3 normal = normalize(cross(dFdx(viewPosition), dFdy(viewPosition)));
     color.rgb *= .85 + .15 * abs(normal.z);
+    // A broad, softly refracted highlight travels diagonally across the photos.
+    vec2 cardUv = vec2(columnX / cardWidth, rowY / imageHeight);
+    float lightPhase = mod(time * .22 + floor(content / rowPitch) * .31, 3.8) - .9;
+    float beam = exp(-pow((cardUv.x + cardUv.y - lightPhase + sin(wave) * .045) / .31, 2.));
+    float sheen = beam * (.06 + .085 * abs(normal.z)) * photo;
+    color.rgb = mix(color.rgb, vec3(.90, .98, 1.), sheen);
     // Fade only the paper itself at the heading; the sea/light stays continuous.
     float screenY = viewport.x - gl_FragCoord.y / viewport.y;
     color.a *= smoothstep(maskEdges.x, maskEdges.y, screenY);

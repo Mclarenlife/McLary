@@ -776,8 +776,66 @@ body.work-view header {
   font-size: 13px;
   opacity: 0.55;
 }
-.playground {
+.gallery {
   color: #f3e9e3;
+}
+.gallery-view #scene {
+  background: radial-gradient(ellipse at center, #18303d, #08151f 70%);
+}
+.gallery .play-title {
+  pointer-events: none;
+}
+.gallery .play-title h1 {
+  font-size: clamp(40px, 5vw, 70px);
+}
+.gallery .play-controls {
+  bottom: 100px;
+}
+.gallery .play-controls .place-status {
+  font-size: 15px;
+  opacity: 0.88;
+  margin-bottom: 18px;
+}
+.gallery .filters button {
+  font-size: 14px;
+  min-width: 65px;
+}
+.gallery .play-controls .photo-note {
+  font-size: 12px;
+  margin: 14px 0 0;
+  opacity: 0.55;
+}
+.photo-access {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.photo-access:focus-within,
+.gallery-fallback .photo-access {
+  width: auto;
+  height: auto;
+  left: 24px;
+  bottom: 190px;
+  clip-path: none;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  pointer-events: auto;
+}
+.photo-access button {
+  padding: 12px 18px;
+  border: 1px solid #688591;
+  background: #112c39;
+  color: #eff7f5;
+  border-radius: 8px;
+}
+.gallery-fallback .photo-access {
+  top: 35%;
+  bottom: auto;
+  right: 24px;
+  justify-content: center;
 }
 .play-title {
   position: absolute;

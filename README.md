@@ -1,6 +1,6 @@
 # McLary — Personal Portfolio
 
-An independently implemented portfolio with an open-ocean 3D scene, reflected water, a sun, moving clouds, a sailboat contact view, an underwater project gallery, and an interactive sculpture playground.
+An independently implemented portfolio with an open-ocean 3D scene, reflected water, a sun, moving clouds, a sailboat contact view, an underwater project list, and a photography gallery around a geographic globe.
 
 ## Start
 
@@ -17,7 +17,7 @@ pnpm check
 pnpm preview
 ```
 
-The static production output is `build/`. It can be deployed independently to any static host. The main routes are `/`, `/work/`, `/contact/`, and `/playground/`; each has a physical HTML entrypoint, so refreshes work without a special server.
+The static production output is `build/`. It can be deployed independently to any static host. The main routes are `/`, `/work/`, `/contact/`, and `/gallery/`; each has a physical HTML entrypoint, so refreshes work without a special server. The former `/playground/` URL redirects to `/gallery/`.
 
 ## GitHub Pages
 
@@ -35,13 +35,27 @@ Edit **`src/content.js`** to change the introduction, biography, contact email a
 
 For each real project, replace its title, category, subtitle, description and image. Put your files in `public/projects/` and set `image: '/projects/your-image.webp'`. Image paths you specify are preserved by the data mapping. Projects open in an accessible native dialog.
 
+For photography, edit `src/photography.js`. The requested initial state contains three empty frames for 广东, 澳门 and 山西, explicitly labeled 照片待添加. Set an image path and title/credit for each entry when your own photographs are available; images retain their original proportions. No stock photographs are published.
+
+## Photography and living environments
+
+The photography globe opens with China facing the viewer. Selecting a place turns the same globe toward that region and moves the perspective camera closer over 2.4 seconds. Guangdong and Shanxi use geoBoundaries polygons; Macau uses Natural Earth coastline geometry. Camera distance is fitted to each geographic extent and the viewport. A dynamic near clipping plane supports both the full Earth and Macau close-up without frame depth artifacts. The selected boundary is illuminated, other frames withdraw, and selecting 全部 restores the complete globe and orbiting frames. Mouse, keyboard frame buttons and accessible dialogs are supported. Reduced motion makes the selection immediate and stops autonomous motion.
+
+The home scene has six separately seeded volume clouds, limb shading and a warm corona around the sun, moving low sea mist, three soft light shafts and three animated gulls. Underwater light shafts bend and pulse in response to layered water waves. A whale, shark and turtle pass on an 86-second cycle with quiet intervals; their movement pauses with reduced motion. A restrained diagonal sheen crosses project photographs without changing caption colours.
+
+The Earth image is NASA Blue Marble. Geographic dataset sources and usage credits are bundled at `public/earth/CREDITS.txt`. All assets load from the same website; the visitor's browser does not contact a map or image service.
+
 ## Source structure
 
 | File                      | Purpose                                                                                 |
 | ------------------------- | --------------------------------------------------------------------------------------- |
 | `src/main.js`             | Navigation, filters, project dialogs, keyboard handling, synthesized audio              |
-| `src/scene.js`            | Scene routing, perspective camera, lighting, reflected water and gallery/sculpture environments     |
+| `src/scene.js`            | Scene routing, perspective camera, lighting, reflected water and photography environment     |
 | `src/ocean-scene.js`     | Procedural sky, sun, clouds, boat, deforming sail and contact ink |
+| `src/ocean-atmosphere.js` | Distinct volume clouds, low mist, light shafts and three gulls |
+| `src/sea-visitors.js` | Infrequent animated whale, shark and turtle passages |
+| `src/photo-globe.js` | Geographic globe orientation, region highlights, camera fitting and orbiting frames |
+| `src/photography.js` | Photography places and user-editable empty frame entries |
 | `src/underwater-scene.js` | Underwater light shafts, surface shimmer, instanced swimming fish and bounded pointer bubbles |
 | `src/scene-push.js`       | Two-background, direction-aware compression and elastic scene replacement               |
 | `src/water-motion.js`     | Animated water geometry, reflection distortion, gentle pointer ripples and scene refraction      |
@@ -74,6 +88,8 @@ Run `node scripts/check-motion.mjs` to check the unfolded initial row, smooth ra
 Run `node scripts/check-ocean.mjs` to check desktop/mobile home placement, contact framing and the perspective zoom.
 
 Run `node scripts/check-underwater.mjs` to check the bubble pool limit, upward drift, expiry, route cleanup, fish movement and responsive sizing.
+
+Run `node scripts/check-gallery.mjs` to check geographic orientation, desktop/mobile region fitting, camera clearance, empty frames and the large-creature schedule.
 
 ## Accessibility and resilience
 

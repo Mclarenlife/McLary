@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { OceanAtmosphere } from "./ocean-atmosphere.js";
 
 export const BOAT_SCALE = 0.68;
 export const boatPosition = (mobile) => ({ x: mobile ? 2.1 : 6.1, z: -4 });
@@ -46,8 +47,8 @@ export class OceanScene {
         side: THREE.BackSide,
         depthWrite: false,
         uniforms: {
-          top: { value: new THREE.Color("#8dbfd6") },
-          horizon: { value: new THREE.Color("#f4e4d0") },
+          top: { value: new THREE.Color("#80bfdc") },
+          horizon: { value: new THREE.Color("#f6eada") },
         },
         vertexShader: `varying vec3 direction; void main(){ direction=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
         fragmentShader: `uniform vec3 top; uniform vec3 horizon; varying vec3 direction; void main(){ float y=normalize(direction).y; vec3 color=mix(horizon,top,smoothstep(-.02,.48,y)); gl_FragColor=vec4(color,1.); }`,
@@ -57,20 +58,26 @@ export class OceanScene {
     const sun = new THREE.Mesh(
       new THREE.SphereGeometry(4.6, 40, 24),
       new THREE.MeshBasicMaterial({
-        color: "#fff0c8",
+        color: new THREE.Color(3.2, 2.7, 1.9),
         toneMapped: false,
         fog: false,
       }),
     );
     sun.position.set(-42, 29, -120);
     this.sun = sun;
+    sun.material.dispose();
+    sun.material = new THREE.ShaderMaterial({
+      vertexShader: `varying vec3 n; varying vec3 v; void main(){ vec4 p=modelViewMatrix*vec4(position,1.); n=normalize(normalMatrix*normal); v=normalize(-p.xyz); gl_Position=projectionMatrix*p; }`,
+      fragmentShader: `varying vec3 n; varying vec3 v; void main(){ float limb=pow(max(0.,dot(normalize(n),normalize(v))),.45); gl_FragColor=vec4(mix(vec3(1.8,1.1,.40),vec3(5.,4.2,2.8),limb),1.); }`,
+    });
     this.group.add(sun);
     const glowCanvas = document.createElement("canvas");
     glowCanvas.width = glowCanvas.height = 128;
     const glowCtx = glowCanvas.getContext("2d");
     const glow = glowCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
-    glow.addColorStop(0, "rgba(255,235,185,.4)");
-    glow.addColorStop(0.22, "rgba(255,231,180,.23)");
+    glow.addColorStop(0, "rgba(255,244,211,.78)");
+    glow.addColorStop(0.12, "rgba(255,239,192,.60)");
+    glow.addColorStop(0.36, "rgba(255,229,173,.23)");
     glow.addColorStop(1, "rgba(255,235,185,0)");
     glowCtx.fillStyle = glow;
     glowCtx.fillRect(0, 0, 128, 128);
@@ -83,52 +90,12 @@ export class OceanScene {
       }),
     );
     halo.position.copy(sun.position);
-    halo.scale.set(45, 45, 1);
+    halo.scale.set(55, 55, 1);
     this.halo = halo;
     this.group.add(halo);
 
-    const cloudCanvas = document.createElement("canvas");
-    cloudCanvas.width = 512;
-    cloudCanvas.height = 192;
-    const ctx = cloudCanvas.getContext("2d");
-    for (let i = 0; i < 18; i++) {
-      const x = 48 + i * 24,
-        y = 96 + Math.sin(i * 2.37) * 16;
-      const radius = 35 + (Math.sin(i * 4.1) + 1) * 15;
-      const mist = ctx.createRadialGradient(x, y, radius * 0.1, x, y, radius);
-      mist.addColorStop(0, "rgba(255,251,243,.88)");
-      mist.addColorStop(0.55, "rgba(255,251,243,.64)");
-      mist.addColorStop(1, "rgba(255,251,243,0)");
-      ctx.fillStyle = mist;
-      ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
-    }
-    const cloudMap = canvasTexture(cloudCanvas);
-    this.clouds = [];
-    [
-      [-63, 16, -115, 32],
-      [-8, 45, -150, 53],
-      [48, 24, -130, 50],
-      [78, 42, -175, 70],
-      [-77, 45, -170, 65],
-      [15, 14, -160, 45],
-    ].forEach(([x, y, z, size], i) => {
-      const cloud = new THREE.Sprite(
-        new THREE.SpriteMaterial({
-          map: cloudMap,
-          transparent: true,
-          opacity: 0.9,
-          depthWrite: false,
-          fog: false,
-          toneMapped: false,
-        }),
-      );
-      cloud.position.set(x, y, z);
-      cloud.scale.set(size, size * 0.375, 1);
-      cloud.userData.x = x;
-      cloud.userData.phase = i;
-      this.group.add(cloud);
-      this.clouds.push(cloud);
-    });
+    this.atmosphere = new OceanAtmosphere();
+    this.group.add(this.atmosphere.group);
 
     this.boat = new THREE.Group();
     this.boat.scale.setScalar(BOAT_SCALE);
@@ -304,11 +271,8 @@ export class OceanScene {
     }
     positions.needsUpdate = true;
     this.sail.geometry.computeVertexNormals();
-    this.clouds.forEach((cloud) => {
-      cloud.position.x =
-        cloud.userData.x +
-        Math.sin(time * 0.025 + cloud.userData.phase) * 3 * motion;
-    });
+    this.atmosphere.update(time, motion);
+    this.halo.material.opacity = 0.92 + Math.sin(time * 0.19) * 0.035 * motion;
   }
 
   emailBounds(camera, width, height) {

@@ -11,7 +11,7 @@ async function walk(dir) {
   ).flat();
 }
 const files = await walk("build");
-for (const route of ["", "work/", "contact/", "playground/"])
+for (const route of ["", "work/", "contact/", "gallery/"])
   if (!files.includes(path.join("build", route, "index.html")))
     issues.push(`Missing route: ${route}`);
 for (const file of files) {

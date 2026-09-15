@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { SeaVisitors } from "./sea-visitors.js";
 
 const backgroundVertex = /* glsl */ `
   varying vec2 vUv;
@@ -20,6 +21,9 @@ const backgroundFragment = /* glsl */ `
   void main() {
     vec2 uv = vUv + pointer * .008;
     float depth = 1. - uv.y;
+    float waveSlope = sin(uv.x * 17. + time * .78) * .012
+      + sin(uv.x * 31. - time * 1.07) * .006;
+    uv.x += waveSlope * (.3 + depth * 1.7);
     vec3 color = mix(vec3(.004, .025, .058), vec3(.07, .32, .37), pow(uv.y, 1.45));
     float water = noise(vec2(uv.x * 9. + time * .045, uv.y * 5. - time * .06));
     color += vec3(.007, .027, .03) * water;
@@ -29,14 +33,15 @@ const backgroundFragment = /* glsl */ `
     float rays = 0.;
     for (int i = 0; i < 9; i++) {
       float n = float(i);
-      float source = .22 + .072 * n;
-      float slope = (n - 4.) * .135 + sin(time * .13 + n * 2.7) * .025;
-      float center = source + (depth + .1) * slope;
-      float width = (.012 + .025 * depth) * (1. + .3 * sin(n * 7.));
+      float surfaceWave = sin(time * .73 + n * 1.43) * .021 + sin(time * 1.11 - n * 2.3) * .009;
+      float source = .22 + .072 * n + surfaceWave;
+      float slope = (n - 4.) * .135 + cos(time * .62 + n * 1.43) * .075;
+      float center = source + (depth + .1) * slope + sin(depth * 11. - time * .9 + n) * depth * .014;
+      float width = (.012 + .025 * depth) * (1. + .32 * sin(time * .9 + n * 2.1));
       float distance = (uv.x - center) * min(aspect, 1.7);
       float shaft = exp(-pow(distance / width, 2.));
       float filament = .65 + .35 * noise(vec2(uv.x * 65. + n, depth * 3. + time * .16));
-      rays += shaft * filament * (.65 + .35 * sin(time * .25 + n * 4.));
+      rays += shaft * filament * (.65 + .35 * sin(time * .86 + n * 4. + depth * 7.));
     }
     rays *= exp(-depth * 2.5) * smoothstep(0., .12, depth);
     color += vec3(.12, .27, .25) * rays;
@@ -252,6 +257,8 @@ export class UnderwaterScene {
     this.fish.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.fish.frustumCulled = false;
     this.group.add(this.fish);
+    this.visitors = new SeaVisitors();
+    this.group.add(this.visitors.group);
     this.transform = new THREE.Object3D();
     this.update(0, 0, new THREE.Vector2());
   }
@@ -264,6 +271,7 @@ export class UnderwaterScene {
     this.bubbles.setActive(false);
   }
   update(time, delta, pointer) {
+    this.visitors.update(delta);
     this.time.value = time;
     this.backdrop.material.uniforms.pointer.value.copy(pointer);
     for (let i = 0; i < this.fish.count; i++) {

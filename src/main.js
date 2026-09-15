@@ -3,6 +3,7 @@ import gsap from "gsap";
 import { PortfolioScene } from "./scene.js";
 import { profile, projects } from "./content.js";
 import { GalleryMotion } from "./gallery-motion.js";
+import { places, photographs } from "./photography.js";
 
 let scene;
 let sceneUnavailable = false;
@@ -23,10 +24,11 @@ const pages = {
   "/": "index",
   "/work/": "work",
   "/about/": "contact",
-  "/playground/": "playground",
+  "/playground/": "gallery",
+  "/gallery/": "gallery",
   "/projects/": "work",
   "/contact/": "contact",
-  "/world/": "playground",
+  "/world/": "gallery",
 };
 const normalize = (p) => (p === "/" ? p : p.replace(/\/$/, "") + "/");
 function page() {
@@ -36,7 +38,7 @@ function brand() {
   return `<a class="brand" href="/" aria-label="McLary home">Mc<em>Lary</em><sup>✳</sup></a>`;
 }
 function shell() {
-  app.innerHTML = `<header>${brand()}<nav class="nav" aria-label="Main"><a href="/">Index</a><a href="/work/">Work</a><a href="/contact/">Contact</a><button class="menu-toggle" aria-label="Open menu" aria-expanded="false"><span class="menu-dots"><i></i><i></i></span></button></nav></header><div class="menu" inert><nav aria-label="Explore"><a href="/"><small>01</small>Index</a><a href="/work/"><small>02</small>Work</a><a href="/contact/"><small>03</small>Contact</a><a href="/playground/"><small>04</small>Playground</a></nav><div class="menu-meta">${profile.name}<br>${profile.title}<p>${profile.introduction}</p></div></div><main class="page" id="content"></main><footer class="bottom"><div class="bottom-left"><button class="sound" aria-label="Enable ambient sound" aria-pressed="false"><i></i><i></i><i></i><i></i><i></i></button><span class="edition">PORTFOLIO — 2026</span></div><a href="/playground/" class="play-link"><span>Enter</span><span class="globe" aria-hidden="true">◎</span><span>Playground</span></a><span class="copyright">© ${new Date().getFullYear()} McLary</span></footer><dialog class="dialog" aria-labelledby="detail-title"></dialog>`;
+  app.innerHTML = `<header>${brand()}<nav class="nav" aria-label="Main"><a href="/">Index</a><a href="/work/">Work</a><a href="/contact/">Contact</a><button class="menu-toggle" aria-label="Open menu" aria-expanded="false"><span class="menu-dots"><i></i><i></i></span></button></nav></header><div class="menu" inert><nav aria-label="Explore"><a href="/"><small>01</small>Index</a><a href="/work/"><small>02</small>Work</a><a href="/contact/"><small>03</small>Contact</a><a href="/gallery/"><small>04</small>Gallery</a></nav><div class="menu-meta">${profile.name}<br>${profile.title}<p>${profile.introduction}</p></div></div><main class="page" id="content"></main><footer class="bottom"><div class="bottom-left"><button class="sound" aria-label="Enable ambient sound" aria-pressed="false"><i></i><i></i><i></i><i></i><i></i></button><span class="edition">PORTFOLIO — 2026</span></div><a href="/gallery/" class="play-link"><span>Enter</span><span class="globe" aria-hidden="true">◎</span><span>Gallery</span></a><span class="copyright">© ${new Date().getFullYear()} McLary</span></footer><dialog class="dialog" aria-labelledby="detail-title"></dialog>`;
   document
     .querySelector(".menu-toggle")
     .addEventListener("click", () => toggleMenu());
@@ -62,10 +64,11 @@ function showPage(updateScene = true) {
   const main = document.querySelector("main");
   main.className = "page " + route;
   document.body.classList.toggle("work-view", route === "work");
+  document.body.classList.toggle("gallery-view", route === "gallery");
   document.documentElement.classList.toggle("work-view", route === "work");
   document.body.classList.toggle(
     "dark-header",
-    route === "playground" || route === "work",
+    route === "gallery" || route === "work",
   );
   document
     .querySelectorAll(".nav>a")
@@ -94,23 +97,39 @@ function showPage(updateScene = true) {
         : "") +
       '<a class="contact-back" href="/">Back to Index ↗</a></div></section>';
     if (!scene || sceneUnavailable) main.classList.add("contact-fallback");
-  } else if (route === "playground") {
-    main.innerHTML = `<div class="play-title"><p class="eyebrow">A SPACE FOR CURIOSITY</p><h1>Play a little.</h1></div><div class="play-controls"><p>Drag to turn. Take your time.</p><div class="filters" aria-label="Choose a sculpture"><button data-sculpture="ribbon" aria-pressed="true">Ribbon</button><button data-sculpture="orbit" aria-pressed="false">Orbit</button><button data-sculpture="bloom" aria-pressed="false">Bloom</button></div></div>`;
-    main.querySelectorAll("[data-sculpture]").forEach(
+  } else if (route === "gallery") {
+    main.innerHTML = `<div class="play-title"><p class="eyebrow">PHOTOGRAPHY</p><h1>Photo gallery.</h1></div><div class="play-controls"><p class="place-status" role="status">中国 · 从这里开始</p><div class="filters" aria-label="拍摄地点">${places.map((p) => `<button data-place="${p.id}" aria-pressed="${p.id === "all"}">${p.name}</button>`).join("")}</div><p class="photo-note">空相框 · 照片待添加</p></div><div class="photo-access" aria-label="摄影相框">${photographs.map((p) => `<button data-photo="${p.id}">${p.title} · 照片待添加</button>`).join("")}</div>`;
+    main.querySelectorAll("[data-place]").forEach(
       (b) =>
         (b.onclick = () => {
           main
-            .querySelectorAll("[data-sculpture]")
+            .querySelectorAll("[data-place]")
             .forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-          scene?.setSculpture(b.dataset.sculpture);
+          const p = places.find((p) => p.id === b.dataset.place);
+          main.querySelector(".place-status").textContent =
+            p.id === "all" ? "中国 · 从这里开始" : p.name + " · " + p.english;
+          main
+            .querySelectorAll("[data-photo]")
+            .forEach(
+              (button) =>
+                (button.hidden =
+                  p.id !== "all" &&
+                  photographs.find((photo) => photo.id === button.dataset.photo)
+                    .place !== p.id),
+            );
+          scene?.setPlace(p.id);
         }),
     );
+    main
+      .querySelectorAll("[data-photo]")
+      .forEach((b) => (b.onclick = () => openPhoto(b.dataset.photo)));
+    if (sceneUnavailable) main.classList.add("gallery-fallback");
   } else
     main.innerHTML =
       '<div class="not-found"><h1>This path is still unwritten.</h1><a class="pill" href="/">Back to the beginning ↗</a></div>';
   if (updateScene) scene?.setPage(route);
   window.scrollTo(0, 0);
-  document.title = `McLary — ${{ index: "A world of possibility", work: "Selected work", contact: "Contact", playground: "Playground" }[route] || "Page not found"}`;
+  document.title = `McLary — ${{ index: "A world of possibility", work: "Selected work", contact: "Contact", gallery: "Gallery" }[route] || "Page not found"}`;
 }
 
 function navigate(path) {
@@ -367,6 +386,14 @@ function openProject(id) {
   d.querySelector("button").onclick = () => d.close();
   d.showModal();
 }
+function openPhoto(id) {
+  const p = photographs.find((p) => p.id === id);
+  if (!p) return;
+  const d = document.querySelector(".dialog");
+  d.innerHTML = `<button class="dialog-close" aria-label="Close photograph">×</button>${p.image ? `<img src="${p.image}" alt="${p.title}" style="object-fit:contain"/>` : ""}<div class="dialog-content"><p class="eyebrow">PHOTOGRAPHY</p><h2 id="detail-title">${p.title}</h2><p>${p.image ? p.credit || "McLary" : "照片待添加"}</p></div>`;
+  d.querySelector("button").onclick = () => d.close();
+  d.showModal();
+}
 function toggleMenu(force) {
   menuOpen = force ?? !menuOpen;
   const m = document.querySelector(".menu"),
@@ -464,6 +491,7 @@ async function start() {
     scene = new PortfolioScene(document.querySelector("#scene"));
     document.querySelector("main").classList.remove("contact-fallback");
     scene.setPage(page());
+    scene.onPhotoSelect = openPhoto;
     scene.onContactFrame = (bounds, reveal) => {
       const link = document.querySelector(".sail-email-link");
       if (!link) return;
@@ -495,7 +523,7 @@ async function start() {
     galleryPrepared,
     scene
       ?.prepare()
-      .catch((error) => console.warn("Ocean preparation unavailable", error)),
+      .catch((error) => console.warn("Scene preparation unavailable", error)),
   ]);
   experienceReady = true;
   updateGalleryProgress(1, "Your space is ready");

@@ -1,13 +1,14 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 const html = await readFile("build/index.html", "utf8");
-for (const route of ["work", "contact", "playground"]) {
+for (const route of ["work", "contact", "gallery"]) {
   await mkdir(`build/${route}`, { recursive: true });
   await writeFile(`build/${route}/index.html`, html);
 }
 for (const [oldPage, newPage] of Object.entries({
   projects: "work",
   about: "contact",
-  world: "playground",
+  world: "gallery",
+  playground: "gallery",
 })) {
   await mkdir(`build/${oldPage}`, { recursive: true });
   await writeFile(
