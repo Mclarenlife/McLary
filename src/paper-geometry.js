@@ -4,13 +4,12 @@ export const damp = (a, b, speed, dt) =>
 
 // Keep the first row fully ahead of the fold at rest. Scrolling eases the
 // continuous bend into the upper gallery, without a sudden geometry switch.
-export function galleryBend(start, height, mobile, scroll) {
+export function galleryBend(start, mobile, scroll) {
   const progress = clamp(scroll / (mobile ? 150 : 190), 0, 1);
   const eased = progress * progress * (3 - 2 * progress);
-  const upperBend = Math.max(
-    start + (mobile ? 105 : 180),
-    height * (mobile ? 0.5 : 0.56),
-  );
+  // Distances are CSS pixels from the viewport top, never a height percentage.
+  // Leave enough room for the 120-degree arc below the fixed heading mask.
+  const upperBend = start + (mobile ? 166 : 205);
   return start - 24 + (upperBend - start + 24) * eased;
 }
 
@@ -66,7 +65,7 @@ export function ribbonPoint(
     );
     lateral =
       1 -
-      0.18 * Math.sin(Math.PI * clamp(phase, 0, 1)) ** 2 +
+      0.07 * Math.sin(Math.PI * clamp(phase, 0, 1)) ** 2 +
       0.13 *
         outward *
         outward *

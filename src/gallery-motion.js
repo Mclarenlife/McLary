@@ -36,6 +36,16 @@ const fragmentShader = /* glsl */ `
   uniform vec2 maskEdges;
   varying vec2 sheet;
   varying vec3 viewPosition;
+  vec4 softened(vec2 uv, vec2 blur) {
+    vec4 center = texture2D(atlas, uv);
+    vec4 a = texture2D(atlas, uv + blur);
+    vec4 b = texture2D(atlas, uv - blur);
+    vec4 c = texture2D(atlas, uv + blur * .45);
+    vec4 d = texture2D(atlas, uv - blur * .45);
+    float alpha = center.a * .36 + (a.a + b.a) * .12 + (c.a + d.a) * .20;
+    vec3 rgb = center.rgb * center.a * .36 + (a.rgb * a.a + b.rgb * b.a) * .12 + (c.rgb * c.a + d.rgb * d.a) * .20;
+    return vec4(rgb / max(alpha, .0001), alpha);
+  }
   void main() {
     float content = sheet.y - start + offset;
     if (content < 0. || content >= contentHeight) discard;
@@ -53,11 +63,34 @@ const fragmentShader = /* glsl */ `
     float columnX = mod(sheet.x * sheetWidth, columnPitch);
     float photo = smoothstep(0., 14., columnX) * (1. - smoothstep(cardWidth - 14., cardWidth, columnX));
     photo *= smoothstep(0., 10., rowY) * (1. - smoothstep(imageHeight - 10., imageHeight, rowY));
-    // Suppress fringing at the image boundary and reduce it on captions to 3%.
+    // One optical field for the complete sheet: the gutter and each card edge
+    // never start a new lens. Intensify the outer sides and the visible lower rim.
+    float screenY = viewport.x - gl_FragCoord.y / viewport.y;
+    float sideEdge = smoothstep(.27, .5, abs(sheet.x - .5));
+    float bottomEdge = smoothstep(viewport.x - 240., viewport.x - 15., screenY);
+    bottomEdge = max(bottomEdge, 1. - smoothstep(0., 160., contentHeight - content));
+    float edge = 1. - (1. - sideEdge) * (1. - bottomEdge);
+    float breathing = .83 + .17 * sin(wave * .6 + crossWave * .4);
+    vec2 outward = vec2((sheet.x - .5) * 2., -bottomEdge * .85);
+    vec2 optical = outward + flow * .22;
+    float captionProtection = mix(.16, 1., photo);
+    float fringe = edge * (2.6 + dispersion * 2.) * breathing * captionProtection;
     vec2 split = (dx * flow.x + dy * flow.y) * dispersion * mix(.03, 1., photo);
-    vec4 red = texture2D(atlas, uv + split);
-    vec4 blue = texture2D(atlas, uv - split);
-    vec4 color = vec4(mix(base.rgb, vec3(red.r, base.g, blue.b), min(red.a, blue.a)), base.a);
+    split += (dx * optical.x + dy * optical.y) * fringe * viewport.y;
+    vec2 blur = (dx * (optical.x + .28) + dy * (optical.y + .45))
+      * edge * (2.1 + dispersion) * breathing * viewport.y * mix(.22, 1., photo);
+    vec4 soft = base;
+    vec4 red;
+    vec4 blue;
+    if (edge > .015) {
+      soft = softened(uv, blur);
+      red = softened(uv + split, blur * .85);
+      blue = softened(uv - split, blur * .85);
+    } else {
+      red = texture2D(atlas, uv + split);
+      blue = texture2D(atlas, uv - split);
+    }
+    vec4 color = vec4(mix(soft.rgb, vec3(red.r, soft.g, blue.b), min(red.a, blue.a)), soft.a);
     vec3 normal = normalize(cross(dFdx(viewPosition), dFdy(viewPosition)));
     color.rgb *= .85 + .15 * abs(normal.z);
     // A broad, softly refracted highlight travels diagonally across the photos.
@@ -67,7 +100,6 @@ const fragmentShader = /* glsl */ `
     float sheen = beam * (.06 + .085 * abs(normal.z)) * photo;
     color.rgb = mix(color.rgb, vec3(.90, .98, 1.), sheen);
     // Fade only the paper itself at the heading; the sea/light stays continuous.
-    float screenY = viewport.x - gl_FragCoord.y / viewport.y;
     color.a *= smoothstep(maskEdges.x, maskEdges.y, screenY);
     gl_FragColor = color;
     #include <colorspace_fragment>
@@ -514,8 +546,18 @@ export class GalleryMotion {
         y + imageHeight + 37,
         cardWidth - 30,
       );
-      ctx.font = '400 24px "DM Sans"';
-      ctx.fillText("↗", x + cardWidth - 23, y + imageHeight + 20);
+      // Draw the arrow instead of asking mobile fonts to render a Unicode glyph.
+      const arrowX = x + cardWidth - 22,
+        arrowY = y + imageHeight + 25;
+      ctx.strokeStyle = "#eaf9f5";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(arrowX, arrowY + 13);
+      ctx.lineTo(arrowX + 13, arrowY);
+      ctx.moveTo(arrowX + 2, arrowY);
+      ctx.lineTo(arrowX + 13, arrowY);
+      ctx.lineTo(arrowX + 13, arrowY + 11);
+      ctx.stroke();
       ctx.strokeStyle = "rgba(215,244,242,.42)";
       ctx.lineWidth = 0.7;
       ctx.beginPath();
@@ -592,7 +634,7 @@ export class GalleryMotion {
       uv = this.geometry.attributes.uv;
     const flutter =
       (this.mobile ? 0.6 : 1) + Math.min(Math.abs(this.speed) / 3000, 0.5);
-    this.bend = galleryBend(this.start, this.height, this.mobile, this.current);
+    this.bend = galleryBend(this.start, this.mobile, this.current);
     for (let i = 0; i < pos.count; i++) {
       const distance =
         this.maximum + (this.minimum - this.maximum) * uv.getY(i);

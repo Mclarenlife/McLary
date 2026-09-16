@@ -139,10 +139,7 @@ export class PhotoGlobe {
       ctx.fillStyle = "#e2e4e5";
       ctx.textAlign = "center";
       ctx.font = '400 64px "Microsoft YaHei",sans-serif';
-      ctx.fillText(photo.title, 480, 300);
-      ctx.fillStyle = "#93989c";
-      ctx.font = '400 25px "Microsoft YaHei",sans-serif';
-      ctx.fillText("照片待添加", 480, 365);
+      ctx.fillText(photo.title, 480, 338);
       texture = new THREE.CanvasTexture(canvas);
     }
     texture.colorSpace = THREE.SRGBColorSpace;

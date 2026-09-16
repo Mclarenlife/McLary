@@ -111,6 +111,17 @@ header > * {
   margin-top: 3px;
   margin-left: 3px;
 }
+.vector-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  flex: none;
+  vertical-align: -0.12em;
+  pointer-events: none;
+}
+.brand sup .vector-icon {
+  display: block;
+}
 .nav {
   display: flex;
   align-items: center;
@@ -799,11 +810,6 @@ body.work-view header {
 .gallery .filters button {
   font-size: 14px;
   min-width: 65px;
-}
-.gallery .play-controls .photo-note {
-  font-size: 12px;
-  margin: 14px 0 0;
-  opacity: 0.55;
 }
 .photo-access {
   position: fixed;

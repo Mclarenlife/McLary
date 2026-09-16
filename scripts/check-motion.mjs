@@ -11,7 +11,7 @@ for (const { start, height, mobile, radius, horizon } of [
   { start: 330, height: 950, mobile: false, radius: 210, horizon: 238 },
   { start: 258, height: 844, mobile: true, radius: 160, horizon: 188 },
 ]) {
-  const restingBend = galleryBend(start, height, mobile, 0);
+  const restingBend = galleryBend(start, mobile, 0);
   for (const y of [start, start + 100, start + 400]) {
     assert.equal(
       ribbonPoint(0, y, restingBend, radius, horizon, 0, 0)[2],
@@ -19,15 +19,20 @@ for (const { start, height, mobile, radius, horizon } of [
       "The first row must have no curl on initial entry or after resetting",
     );
   }
-  assert.equal(galleryBend(start, height, mobile, -50), restingBend);
-  const activeBend = galleryBend(start, height, mobile, 300);
+  assert.equal(galleryBend(start, mobile, -50), restingBend);
+  const activeBend = galleryBend(start, mobile, 300);
+  assert.equal(
+    activeBend,
+    mobile ? 424 : 535,
+    "The active fold has a fixed CSS-pixel offset from the top",
+  );
   assert(
     activeBend < height * (mobile ? 0.62 : 0.68),
     "The active fold must move higher than the previous fold zone",
   );
   let previous = restingBend;
   for (let travel = 1; travel <= 300; travel++) {
-    const next = galleryBend(start, height, mobile, travel);
+    const next = galleryBend(start, mobile, travel);
     assert(
       next >= previous && next - previous < 2.5,
       "The fold must ease in without a geometry jump",
@@ -50,7 +55,7 @@ for (const { start, height, mobile, radius, horizon } of [
   );
 }
 
-const bend = galleryBend(330, 950, false, 300),
+const bend = galleryBend(330, false, 300),
   radius = 210,
   horizon = 238;
 const surface = (x, distance) =>
@@ -122,11 +127,12 @@ const inwardLeft = surface(-300, bend - firstLength * 0.5);
 const outwardDistance = bend - firstLength - hold - returnLength;
 const outwardLeft = surface(-300, outwardDistance);
 assert(
-  inwardLeft[0] > -260 && outwardLeft[0] < -330,
-  "The left half must bend inward, then outward",
+  inwardLeft[0] > -285 && inwardLeft[0] < -275 && outwardLeft[0] < -330,
+  "The left half must draw inward by only 7%, then open outward",
 );
 assert(
-  surface(300, bend - firstLength * 0.5)[0] < 260 &&
+  surface(300, bend - firstLength * 0.5)[0] > 275 &&
+    surface(300, bend - firstLength * 0.5)[0] < 285 &&
     surface(300, outwardDistance)[0] > 330,
   "The right half must mirror the left half",
 );

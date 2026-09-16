@@ -7,7 +7,7 @@ export const profile = {
   introduction: "Exploring the space between imagination and experience.",
   about:
     "A personal collection of ideas, experiments and new perspectives. I’m drawn to expressive identities, thoughtful digital experiences and the unexpected beauty in everyday things.",
-  email: "", // Add your real contact email to enable the email and copy actions.
+  email: "xiangjinleee@gmail.com",
   socials: [], // Example: { label: 'Instagram', url: 'https://instagram.com/yourname' }
 };
 

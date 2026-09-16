@@ -4,6 +4,7 @@ import { PortfolioScene } from "./scene.js";
 import { profile, projects } from "./content.js";
 import { GalleryMotion } from "./gallery-motion.js";
 import { places, photographs } from "./photography.js";
+import { arrowDown, arrowUp, asterisk, orbitIcon } from "./icons.js";
 
 let scene;
 let sceneUnavailable = false;
@@ -19,7 +20,7 @@ const projectCardPool = new Map();
 const galleryEntry = { value: 0 };
 let navigation;
 const app = document.querySelector("#app");
-const icon = '<span class="arrow" aria-hidden="true">↘</span>';
+const icon = `<span class="arrow" aria-hidden="true">${arrowDown}</span>`;
 const pages = {
   "/": "index",
   "/work/": "work",
@@ -35,10 +36,10 @@ function page() {
   return pages[normalize(location.pathname)] || "404";
 }
 function brand() {
-  return `<a class="brand" href="/" aria-label="McLary home">Mc<em>Lary</em><sup>✳</sup></a>`;
+  return `<a class="brand" href="/" aria-label="McLary home">Mc<em>Lary</em><sup>${asterisk}</sup></a>`;
 }
 function shell() {
-  app.innerHTML = `<header>${brand()}<nav class="nav" aria-label="Main"><a href="/">Index</a><a href="/work/">Work</a><a href="/contact/">Contact</a><button class="menu-toggle" aria-label="Open menu" aria-expanded="false"><span class="menu-dots"><i></i><i></i></span></button></nav></header><div class="menu" inert><nav aria-label="Explore"><a href="/"><small>01</small>Index</a><a href="/work/"><small>02</small>Work</a><a href="/contact/"><small>03</small>Contact</a><a href="/gallery/"><small>04</small>Gallery</a></nav><div class="menu-meta">${profile.name}<br>${profile.title}<p>${profile.introduction}</p></div></div><main class="page" id="content"></main><footer class="bottom"><div class="bottom-left"><button class="sound" aria-label="Enable ambient sound" aria-pressed="false"><i></i><i></i><i></i><i></i><i></i></button><span class="edition">PORTFOLIO — 2026</span></div><a href="/gallery/" class="play-link"><span>Enter</span><span class="globe" aria-hidden="true">◎</span><span>Gallery</span></a><span class="copyright">© ${new Date().getFullYear()} McLary</span></footer><dialog class="dialog" aria-labelledby="detail-title"></dialog>`;
+  app.innerHTML = `<header>${brand()}<nav class="nav" aria-label="Main"><a href="/">Index</a><a href="/work/">Work</a><a href="/contact/">Contact</a><button class="menu-toggle" aria-label="Open menu" aria-expanded="false"><span class="menu-dots"><i></i><i></i></span></button></nav></header><div class="menu" inert><nav aria-label="Explore"><a href="/"><small>01</small>Index</a><a href="/work/"><small>02</small>Work</a><a href="/contact/"><small>03</small>Contact</a><a href="/gallery/"><small>04</small>Gallery</a></nav><div class="menu-meta">${profile.name}<br>${profile.title}<p>${profile.introduction}</p></div></div><main class="page" id="content"></main><footer class="bottom"><div class="bottom-left"><button class="sound" aria-label="Enable ambient sound" aria-pressed="false"><i></i><i></i><i></i><i></i><i></i></button><span class="edition">PORTFOLIO — 2026</span></div><a href="/gallery/" class="play-link"><span>Enter</span><span class="globe" aria-hidden="true">${orbitIcon}</span><span>Gallery</span></a><span class="copyright">© ${new Date().getFullYear()} McLary</span></footer><dialog class="dialog" aria-labelledby="detail-title"></dialog>`;
   document
     .querySelector(".menu-toggle")
     .addEventListener("click", () => toggleMenu());
@@ -93,12 +94,12 @@ function showPage(updateScene = true) {
       (profile.email || "Contact details coming soon") +
       '</span></a><div class="contact-actions">' +
       (profile.email
-        ? '<button class="pill outline" id="copy-email">Copy email ↗</button>'
+        ? `<button class="pill outline" id="copy-email">Copy email ${arrowUp}</button>`
         : "") +
-      '<a class="contact-back" href="/">Back to Index ↗</a></div></section>';
+      `<a class="contact-back" href="/">Back to Index ${arrowUp}</a></div></section>`;
     if (!scene || sceneUnavailable) main.classList.add("contact-fallback");
   } else if (route === "gallery") {
-    main.innerHTML = `<div class="play-title"><p class="eyebrow">PHOTOGRAPHY</p><h1>Photo gallery.</h1></div><div class="play-controls"><p class="place-status" role="status">中国 · 从这里开始</p><div class="filters" aria-label="拍摄地点">${places.map((p) => `<button data-place="${p.id}" aria-pressed="${p.id === "all"}">${p.name}</button>`).join("")}</div><p class="photo-note">空相框 · 照片待添加</p></div><div class="photo-access" aria-label="摄影相框">${photographs.map((p) => `<button data-photo="${p.id}">${p.title} · 照片待添加</button>`).join("")}</div>`;
+    main.innerHTML = `<div class="play-title"><p class="eyebrow">PHOTOGRAPHY</p><h1>Photo gallery.</h1></div><div class="play-controls"><p class="place-status" role="status">中国 · 从这里开始</p><div class="filters" aria-label="拍摄地点">${places.map((p) => `<button data-place="${p.id}" aria-pressed="${p.id === "all"}">${p.name}</button>`).join("")}</div></div><div class="photo-access" aria-label="摄影相框">${photographs.map((p) => `<button data-photo="${p.id}">${p.title}</button>`).join("")}</div>`;
     main.querySelectorAll("[data-place]").forEach(
       (b) =>
         (b.onclick = () => {
@@ -127,8 +128,7 @@ function showPage(updateScene = true) {
     });
     if (sceneUnavailable) main.classList.add("gallery-fallback");
   } else
-    main.innerHTML =
-      '<div class="not-found"><h1>This path is still unwritten.</h1><a class="pill" href="/">Back to the beginning ↗</a></div>';
+    main.innerHTML = `<div class="not-found"><h1>This path is still unwritten.</h1><a class="pill" href="/">Back to the beginning ${arrowUp}</a></div>`;
   if (updateScene) scene?.setPage(route);
   window.scrollTo(0, 0);
   document.title = `McLary — ${{ index: "A world of possibility", work: "Selected work", contact: "Contact", gallery: "Gallery" }[route] || "Page not found"}`;
@@ -349,7 +349,7 @@ function renderCards() {
     template.innerHTML = projects
       .map(
         (p) =>
-          `<button class="project-card" data-project="${p.id}" aria-label="View ${p.title}"><div class="project-cover" style="--project-color:${p.color}">${p.image ? `<img src="${p.image}" alt="${p.title} — original 3D concept study"/>` : ""}</div><div class="project-info"><div><h2>${p.title}</h2><p>${p.subtitle}</p></div><span aria-hidden="true">↗</span></div></button>`,
+          `<button class="project-card" data-project="${p.id}" aria-label="View ${p.title}"><div class="project-cover" style="--project-color:${p.color}">${p.image ? `<img src="${p.image}" alt="${p.title} — original 3D concept study"/>` : ""}</div><div class="project-info"><div><h2>${p.title}</h2><p>${p.subtitle}</p></div><span aria-hidden="true">${arrowUp}</span></div></button>`,
       )
       .join("");
     template.content.querySelectorAll("[data-project]").forEach((card) => {
@@ -392,7 +392,7 @@ function openPhoto(id) {
   const p = photographs.find((p) => p.id === id);
   if (!p) return;
   const d = document.querySelector(".dialog");
-  d.innerHTML = `<button class="dialog-close" aria-label="Close photograph">×</button>${p.image ? `<img src="${p.image}" alt="${p.title}" style="object-fit:contain"/>` : ""}<div class="dialog-content"><p class="eyebrow">PHOTOGRAPHY</p><h2 id="detail-title">${p.title}</h2><p>${p.image ? p.credit || "McLary" : "照片待添加"}</p></div>`;
+  d.innerHTML = `<button class="dialog-close" aria-label="Close photograph">×</button>${p.image ? `<img src="${p.image}" alt="${p.title}" style="object-fit:contain"/>` : ""}<div class="dialog-content"><p class="eyebrow">PHOTOGRAPHY</p><h2 id="detail-title">${p.title}</h2>${p.image ? `<p>${p.credit || "McLary"}</p>` : ""}</div>`;
   d.querySelector("button").onclick = () => d.close();
   d.showModal();
 }
