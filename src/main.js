@@ -5,6 +5,7 @@ import { profile, projects } from "./content.js";
 import { GalleryMotion } from "./gallery-motion.js";
 import { places, photographs } from "./photography.js";
 import { arrowDown, arrowUp, asterisk, orbitIcon } from "./icons.js";
+import { SingularityTransition } from "./singularity-transition.js";
 
 let scene;
 let sceneUnavailable = false;
@@ -19,6 +20,7 @@ let galleryParking;
 const projectCardPool = new Map();
 const galleryEntry = { value: 0 };
 let navigation;
+let singularity;
 const app = document.querySelector("#app");
 const icon = `<span class="arrow" aria-hidden="true">${arrowDown}</span>`;
 const pages = {
@@ -147,6 +149,28 @@ function navigate(path) {
   }
   const main = document.querySelector("main");
   const nextPage = pages[normalize(path)] || "404";
+  if (nextPage === "gallery") {
+    scene?.cancelTransition();
+    if (scene) scene.singularityActive = true;
+    navigation = singularity.start(
+      () => {
+        history.pushState({}, "", path);
+        galleryEntry.value = 0;
+        showPage(false);
+        scene?.setPage("gallery", true);
+        scene?.render();
+      },
+      () => {
+        if (scene) scene.singularityActive = false;
+      },
+    );
+    if (
+      import.meta.env.DEV &&
+      new URLSearchParams(location.search).has("transition-study")
+    )
+      navigation.timeScale(0.2);
+    return;
+  }
   if (
     scene &&
     ["index", "contact"].includes(page()) &&
@@ -477,6 +501,7 @@ function enter(withSound = false) {
   document.querySelector("footer").inert = false;
 }
 shell();
+singularity = new SingularityTransition();
 showPage();
 document.querySelector("main").inert = true;
 document.querySelector("header").inert = true;
@@ -578,12 +603,23 @@ addEventListener("scene-unavailable", () => {
 });
 addEventListener("popstate", () => {
   navigation?.kill();
+  singularity.cancel();
+  if (scene) scene.singularityActive = false;
   scene?.cancelTransition();
   galleryEntry.value = 0;
   document.querySelector("main").style.pointerEvents = "";
   if (menuOpen) toggleMenu(false);
   showPage();
 });
+// Resizing or changing the motion preference settles at the destination, rather
+// than leaving a viewport-sized lens or an inert interface behind.
+addEventListener("resize", () => singularity.complete());
+matchMedia("(prefers-reduced-motion: reduce)").addEventListener(
+  "change",
+  (event) => {
+    if (event.matches) singularity.complete();
+  },
+);
 addEventListener("keydown", (e) => {
   if (e.key === "Escape" && menuOpen) {
     toggleMenu(false);

@@ -459,6 +459,7 @@ export class PortfolioScene {
         !this.dragging &&
         !document.body.classList.contains("menu-open") &&
         !document.querySelector("dialog[open]") &&
+        !this.singularityActive &&
         !this.waterMotion.push.pass.enabled;
       this.photoGallery.update(t, this.camera, motion, this.dragOffset, delta);
       this.renderer.domElement.style.cursor = this.photoGallery.hovered
