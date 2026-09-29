@@ -3,8 +3,6 @@ import {
   SingularityTransition,
   vortexOffset,
 } from "../src/singularity-transition.js";
-
-// Exercise the actual GSAP route lifecycle without a GPU or a browser clock.
 const classes = () => {
   const values = new Set();
   return {
@@ -15,7 +13,6 @@ const classes = () => {
 };
 globalThis.innerWidth = 1440;
 globalThis.innerHeight = 900;
-globalThis.devicePixelRatio = 2;
 globalThis.document = { documentElement: { classList: classes() } };
 const effect = Object.create(SingularityTransition.prototype);
 effect.stage = { classList: classes(), dataset: {} };
@@ -26,8 +23,6 @@ effect.world = {
     effect.world.style = {};
   },
 };
-effect.light = {};
-effect.context = { setTransform() {} };
 effect.filters = { querySelector: () => ({ setAttribute() {} }) };
 effect.update = () => {};
 effect.makeField = () => {};
@@ -38,21 +33,18 @@ const begin = () =>
     .start(
       () => {
         swaps++;
+        assert.equal(effect.world.style.visibility, "hidden");
         assert.equal(
-          effect.world.style.visibility,
-          "hidden",
-          "Route content changes only behind the singularity",
+          effect.state.scale,
+          0,
+          "Swap only at a truly invisible point",
         );
       },
       () => completions++,
     )
     .pause();
-const cleaned = () => {
-  assert.equal(
-    effect.world.inert,
-    false,
-    "Navigation must be usable after interruption",
-  );
+const clean = () => {
+  assert.equal(effect.world.inert, false);
   assert.equal(effect.world.style.visibility, undefined);
   assert.equal(effect.stage.dataset.phase, undefined);
   assert.equal(
@@ -61,28 +53,38 @@ const cleaned = () => {
   );
   assert.equal(effect.timeline, null);
 };
-
 let timeline = begin();
-timeline.totalTime(1.3, false);
-assert.equal(swaps, 0, "The old route remains mounted during collapse");
-assert(effect.state.scale > 0.009 && effect.state.scale < 0.5);
-timeline.totalTime(1.5, false);
+timeline.totalTime(0.04, false);
+assert(
+  effect.state.scale < 0.99 && effect.state.warp > 0,
+  "Movement starts immediately, with no anticipation",
+);
+timeline.totalTime(1.09, false);
+assert.equal(swaps, 0);
+assert(effect.state.scale < 0.015);
+timeline.totalTime(1.1, false);
 assert.equal(swaps, 1);
-assert.equal(effect.stage.dataset.phase, "singularity");
-assert.equal(effect.state.scale, 0.009);
-timeline.totalTime(2.1, false);
+assert.equal(effect.state.scale, 0);
 assert.equal(effect.stage.dataset.phase, "burst");
-assert.equal(effect.world.style.visibility, "");
-assert(effect.state.scale > 0.5);
+timeline.totalTime(1.11, false);
+assert(
+  effect.state.scale > 0.01,
+  "Release begins immediately with no singularity hold",
+);
+timeline.totalTime(2.16, false);
+assert(
+  effect.state.scale < 0.985,
+  "No nearly stationary tail before completion",
+);
 timeline.totalTime(timeline.duration(), false);
 assert.equal(completions, 1);
 assert.equal(effect.state.scale, 1);
 assert.equal(effect.state.warp, 0);
 assert.equal(effect.state.split, 0);
-cleaned();
+clean();
 
-// Track actual visible rotation after inverse sampling, not just the outer box.
-// Both the collapse and release must move clockwise at every radial distance.
+// Follow inverse samples through all three real filter stages, including the
+// radius changes between stages. Both halves must continue clockwise.
 timeline = effect
   .start(
     () => {},
@@ -90,68 +92,61 @@ timeline = effect
   )
   .pause();
 const radii = [0.05, 0.3, 0.7, 1.2, 2];
-const previousAngles = radii.map(() => 0);
-for (let t = 0; t <= 3.4; t += 0.01) {
+const previous = radii.map(() => 0);
+let strongestTwist = 0;
+for (let t = 0; t <= 2.2; t += 0.005) {
   timeline.totalTime(t, false);
   radii.forEach((radius, i) => {
-    const [dx, dy] = vortexOffset(radius, 0);
-    const angle =
-      (effect.state.turn * Math.PI) / 180 -
-      Math.atan2(dy * effect.state.warp, radius + dx * effect.state.warp);
+    let x = radius,
+      y = 0,
+      twist = 0;
+    for (let layer = 0; layer < 3; layer++) {
+      const [dx, dy] = vortexOffset(x, y);
+      const nx = x + dx * effect.state.warp,
+        ny = y + dy * effect.state.warp;
+      twist += Math.atan2(x * ny - y * nx, x * nx + y * ny);
+      x = nx;
+      y = ny;
+    }
+    strongestTwist = Math.max(strongestTwist, -twist);
+    const visible = (effect.state.turn * Math.PI) / 180 - twist;
     assert(
-      angle >= previousAngles[i] - 0.00001,
-      "The vortex must never reverse during collapse or burst",
+      visible >= previous[i] - 0.00001,
+      "The composed spiral must not reverse",
     );
-    previousAngles[i] = angle;
+    previous[i] = visible;
   });
 }
-effect.cancel();
-assert.equal(
-  Math.hypot(...vortexOffset(0, 0)),
-  0,
-  "The singularity stays centred",
+assert(
+  strongestTwist > 4.8,
+  "Centre deformation must exceed 275 degrees, not just rigid rotation",
 );
-
+effect.cancel();
+assert.equal(Math.hypot(...vortexOffset(0, 0)), 0);
 timeline = begin();
-timeline.totalTime(0.7, false);
+timeline.totalTime(0.4, false);
 effect.cancel();
-assert.equal(
-  swaps,
-  1,
-  "Back navigation before the singularity must not commit the abandoned route",
-);
 timeline.totalTime(timeline.duration(), false);
-assert.equal(
-  swaps,
-  1,
-  "A killed transition must never commit a stale destination",
-);
-cleaned();
-
-// Resize/reduced-motion completion can happen before the route has changed.
+assert.equal(swaps, 1, "Cancellation must not commit an abandoned route");
+clean();
 timeline = effect
   .start(
     () => swaps++,
     () => completions++,
   )
   .pause();
-timeline.totalTime(0.6, false);
+timeline.totalTime(0.4, false);
 effect.complete();
 effect.complete();
 assert.equal(swaps, 2);
 assert.equal(completions, 2);
-cleaned();
-
+clean();
 timeline = begin();
-timeline.totalTime(1.7, false);
+timeline.totalTime(1.3, false);
 effect.complete();
-assert.equal(
-  swaps,
-  3,
-  "Completing an already swapped route must not add another history entry",
-);
+assert.equal(swaps, 3, "Resize after the swap must not push history twice");
 assert.equal(completions, 3);
-cleaned();
+clean();
 console.log(
-  "Singularity checks passed: hidden route swap, ordered collapse/hold/burst, identity endpoint, cancellation, resize/reduced-motion completion, exactly-once history and interaction cleanup.",
+  "Singularity checks passed: immediate start/release, zero-area swap, no tail, >275-degree spatial twist, clockwise motion, clean endpoint and interruption handling.",
 );

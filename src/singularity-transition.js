@@ -22,11 +22,6 @@ export class SingularityTransition {
     document.body.prepend(this.stage);
     this.stage.append(this.world);
     this.world.append(...document.querySelectorAll("#scene,#grain,#app"));
-    this.light = document.createElement("canvas");
-    this.light.className = "singularity-light";
-    this.light.setAttribute("aria-hidden", "true");
-    this.stage.append(this.light);
-    this.context = this.light.getContext("2d");
     this.filters = document.createElementNS(
       "http://www.w3.org/2000/svg",
       "svg",
@@ -35,11 +30,13 @@ export class SingularityTransition {
     this.filters.setAttribute("aria-hidden", "true");
     this.filters.innerHTML = `<defs><filter id="singularity-lens" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
       <feImage result="field" preserveAspectRatio="none"/>
-      <feDisplacementMap in="SourceGraphic" in2="field" xChannelSelector="R" yChannelSelector="G" scale="0" result="red-warp"/>
+      <feDisplacementMap in="SourceGraphic" in2="field" xChannelSelector="R" yChannelSelector="G" scale="0" result="spiral-a"/>
+      <feDisplacementMap in="spiral-a" in2="field" xChannelSelector="R" yChannelSelector="G" scale="0" result="spiral-b"/>
+      <feDisplacementMap in="spiral-b" in2="field" xChannelSelector="R" yChannelSelector="G" scale="0" result="red-warp"/>
       <feColorMatrix in="red-warp" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="red"/>
-      <feDisplacementMap in="SourceGraphic" in2="field" xChannelSelector="R" yChannelSelector="G" scale="0" result="green-warp"/>
+      <feDisplacementMap in="spiral-b" in2="field" xChannelSelector="R" yChannelSelector="G" scale="0" result="green-warp"/>
       <feColorMatrix in="green-warp" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="green"/>
-      <feDisplacementMap in="SourceGraphic" in2="field" xChannelSelector="R" yChannelSelector="G" scale="0" result="blue-warp"/>
+      <feDisplacementMap in="spiral-b" in2="field" xChannelSelector="R" yChannelSelector="G" scale="0" result="blue-warp"/>
       <feColorMatrix in="blue-warp" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="blue"/>
       <feBlend in="red" in2="green" mode="screen" result="rg"/>
       <feBlend in="rg" in2="blue" mode="screen"/>
@@ -85,10 +82,6 @@ export class SingularityTransition {
     this.height = innerHeight;
     if (this.fieldAspect !== this.width / this.height)
       this.makeField(this.width, this.height);
-    const dpr = Math.min(devicePixelRatio, 1.5);
-    this.light.width = Math.round(this.width * dpr);
-    this.light.height = Math.round(this.height * dpr);
-    this.context.setTransform(dpr, 0, 0, dpr, 0, 0);
     const filter = this.filters.querySelector("filter");
     const field = this.filters.querySelector("feImage");
     for (const [key, value] of Object.entries({
@@ -110,8 +103,6 @@ export class SingularityTransition {
       turn: 0,
       warp: 0,
       split: 0,
-      core: 0,
-      burst: 0,
       round: 0,
     };
     this.stage.classList.add("is-active");
@@ -122,65 +113,34 @@ export class SingularityTransition {
       onUpdate: () => this.update(),
       onComplete: () => this.finish(),
     });
-    // Tension, accelerating implosion, a held point, then a fast release that settles.
+    // Two continuous strokes, with no anticipation, hold, overshoot or settling.
+    // At the route swap the entire old frame has exactly zero visible area.
     this.timeline
       .to(this.state, {
-        scale: 1.035,
-        turn: 3,
-        warp: 0.025,
-        split: 0.18,
-        duration: 0.3,
-        ease: "sine.inOut",
-      })
-      .to(this.state, {
-        scale: 0.009,
-        turn: 180,
+        scale: 0,
+        turn: 540,
         split: 1,
-        core: 1,
         round: 50,
-        duration: 1.12,
-        ease: "power3.in",
+        duration: 1.1,
+        ease: (t) => 0.5 * t + 0.5 * t * t,
       })
       .call(() => {
-        this.stage.dataset.phase = "singularity";
         this.world.style.visibility = "hidden";
         this.commit();
-      })
-      .to(this.state, {
-        core: 1.2,
-        duration: 0.2,
-        ease: "sine.inOut",
-      })
-      .call(() => {
         this.stage.dataset.phase = "burst";
         this.world.style.visibility = "";
       })
       .to(this.state, {
-        scale: 1.035,
-        turn: 355,
-        warp: 0.03,
-        split: 0.2,
-        core: 0,
-        round: 0,
-        burst: 1,
-        duration: 1.18,
-        ease: "expo.out",
-      })
-      .to(this.state, {
         scale: 1,
-        turn: 360,
+        turn: 1080,
         warp: 0,
         split: 0,
-        duration: 0.6,
-        ease: "sine.inOut",
+        round: 0,
+        duration: 1.1,
+        ease: (t) => 1 - 0.45 * (1 - t) - 0.55 * (1 - t) ** 2,
       });
-    // Wind the centre before the picture becomes small, so the spiral remains
-    // visible instead of reading as a rigid rectangle spinning away.
-    this.timeline.to(
-      this.state,
-      { warp: 1, duration: 0.8, ease: "power2.inOut" },
-      0.3,
-    );
+    // Build a three-stage spatial spiral while the picture is still large.
+    this.timeline.to(this.state, { warp: 1, duration: 0.72, ease: "none" }, 0);
     this.stage.dataset.phase = "collapse";
     return this.timeline;
   }
@@ -199,47 +159,10 @@ export class SingularityTransition {
     this.maps.forEach((map, i) => {
       map.setAttribute(
         "scale",
-        strength * s.warp * 2 + (i - 1) * strength * s.split * 0.035,
+        strength * s.warp * 2 +
+          (i < 2 ? 0 : i - 3) * strength * s.split * 0.035,
       );
     });
-    this.drawLight();
-  }
-
-  drawLight() {
-    const ctx = this.context;
-    const s = this.state;
-    const w = this.width,
-      h = this.height;
-    const size = Math.min(w, h);
-    ctx.clearRect(0, 0, w, h);
-    ctx.save();
-    ctx.translate(w / 2, h / 2);
-    ctx.globalCompositeOperation = "screen";
-    if (s.core > 0.001) {
-      const r = size * (0.08 + s.core * 0.05);
-      const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
-      glow.addColorStop(0, `rgba(255,249,235,${Math.min(1, s.core)})`);
-      glow.addColorStop(0.025, `rgba(207,231,255,${s.core * 0.9})`);
-      glow.addColorStop(0.12, `rgba(109,162,247,${s.core * 0.45})`);
-      glow.addColorStop(0.4, `rgba(155,90,204,${s.core * 0.12})`);
-      glow.addColorStop(1, "rgba(89,124,207,0)");
-      ctx.fillStyle = glow;
-      ctx.fillRect(-r, -r, r * 2, r * 2);
-    }
-    if (this.stage.dataset.phase === "burst" && s.burst > 0 && s.burst < 1) {
-      const progress = s.burst;
-      const r = Math.hypot(w, h) * 0.6 * progress;
-      const alpha = Math.pow(1 - progress, 2) * 0.62;
-      const glow = ctx.createRadialGradient(0, 0, r * 0.7, 0, 0, r * 1.08);
-      glow.addColorStop(0, "rgba(81,132,228,0)");
-      glow.addColorStop(0.6, `rgba(116,181,255,${alpha * 0.35})`);
-      glow.addColorStop(0.78, `rgba(210,230,255,${alpha})`);
-      glow.addColorStop(0.86, `rgba(227,119,175,${alpha * 0.55})`);
-      glow.addColorStop(1, "rgba(106,101,200,0)");
-      ctx.fillStyle = glow;
-      ctx.fillRect(-r * 1.1, -r * 1.1, r * 2.2, r * 2.2);
-    }
-    ctx.restore();
   }
 
   finish() {

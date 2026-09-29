@@ -30,9 +30,6 @@ body {
   height: 0;
   pointer-events: none;
 }
-.singularity-light {
-  display: none;
-}
 .singularity-active {
   overflow: hidden;
 }
@@ -54,15 +51,6 @@ body {
   transform-origin: 50% 50%;
   filter: url("#singularity-lens");
   will-change: transform, filter;
-}
-.singularity-stage.is-active .singularity-light {
-  display: block;
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 101;
-  pointer-events: none;
 }
 button,
 a {
