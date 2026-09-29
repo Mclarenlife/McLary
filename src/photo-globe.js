@@ -12,7 +12,7 @@ import { SpaceDecor } from "./space-decor.js";
 
 export const EARTH_RADIUS = 2.7;
 export const ORBIT_RADIUS = 3.65;
-export const PHOTO_WIDTH = 1.3;
+export const PHOTO_WIDTH = 0.85;
 const center = new THREE.Vector3(0, 3.5, 0);
 const orbitUp = new THREE.Vector3(0, 1, 0.24).normalize();
 export function geoPoint(lat, lon, radius = EARTH_RADIUS) {

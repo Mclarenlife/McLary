@@ -136,6 +136,7 @@ export class SpaceDecor {
     dish.rotation.z = -0.4;
     this.satellite.add(dish);
     box(this.satellite, [0.012, 0.25, 0.012], [0, 0.23, 0], graphite);
+    this.satellite.scale.setScalar(0.6);
     this.group.add(this.satellite);
 
     this.station = new THREE.Group();
@@ -147,7 +148,7 @@ export class SpaceDecor {
       solarPanel(this.station, x, -0.34, 0.28, 0.52);
       solarPanel(this.station, x, 0.34, 0.28, 0.52);
     }
-    this.station.scale.setScalar(0.55);
+    this.station.scale.setScalar(0.33);
     this.group.add(this.station);
     this.update(0, 1);
   }

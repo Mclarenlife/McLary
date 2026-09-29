@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { SingularityTransition } from "../src/singularity-transition.js";
+import {
+  SingularityTransition,
+  vortexOffset,
+} from "../src/singularity-transition.js";
 
 // Exercise the actual GSAP route lifecycle without a GPU or a browser clock.
 const classes = () => {
@@ -27,6 +30,7 @@ effect.light = {};
 effect.context = { setTransform() {} };
 effect.filters = { querySelector: () => ({ setAttribute() {} }) };
 effect.update = () => {};
+effect.makeField = () => {};
 let swaps = 0,
   completions = 0;
 const begin = () =>
@@ -76,6 +80,37 @@ assert.equal(effect.state.scale, 1);
 assert.equal(effect.state.warp, 0);
 assert.equal(effect.state.split, 0);
 cleaned();
+
+// Track actual visible rotation after inverse sampling, not just the outer box.
+// Both the collapse and release must move clockwise at every radial distance.
+timeline = effect
+  .start(
+    () => {},
+    () => {},
+  )
+  .pause();
+const radii = [0.05, 0.3, 0.7, 1.2, 2];
+const previousAngles = radii.map(() => 0);
+for (let t = 0; t <= 3.4; t += 0.01) {
+  timeline.totalTime(t, false);
+  radii.forEach((radius, i) => {
+    const [dx, dy] = vortexOffset(radius, 0);
+    const angle =
+      (effect.state.turn * Math.PI) / 180 -
+      Math.atan2(dy * effect.state.warp, radius + dx * effect.state.warp);
+    assert(
+      angle >= previousAngles[i] - 0.00001,
+      "The vortex must never reverse during collapse or burst",
+    );
+    previousAngles[i] = angle;
+  });
+}
+effect.cancel();
+assert.equal(
+  Math.hypot(...vortexOffset(0, 0)),
+  0,
+  "The singularity stays centred",
+);
 
 timeline = begin();
 timeline.totalTime(0.7, false);

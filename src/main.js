@@ -149,7 +149,7 @@ function navigate(path) {
   }
   const main = document.querySelector("main");
   const nextPage = pages[normalize(path)] || "404";
-  if (nextPage === "gallery") {
+  if (nextPage === "gallery" || page() === "gallery") {
     scene?.cancelTransition();
     if (scene) scene.singularityActive = true;
     navigation = singularity.start(
@@ -157,7 +157,7 @@ function navigate(path) {
         history.pushState({}, "", path);
         galleryEntry.value = 0;
         showPage(false);
-        scene?.setPage("gallery", true);
+        scene?.setPage(nextPage, true);
         scene?.render();
       },
       () => {

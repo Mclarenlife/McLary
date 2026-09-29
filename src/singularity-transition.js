@@ -1,5 +1,16 @@
 import gsap from "gsap";
 
+// Inverse sampling rotates counterclockwise, so the visible image winds clockwise.
+// The centre turns more than the rim: this bends the picture into a spiral.
+export function vortexOffset(x, y) {
+  const radius2 = x * x + y * y;
+  const angle = -1.7 * Math.exp(-radius2 * 0.45);
+  const pinch = 1 + 0.14 * Math.exp(-radius2 * 0.4);
+  const c = Math.cos(angle),
+    s = Math.sin(angle);
+  return [(x * c - y * s) * pinch - x, (x * s + y * c) * pinch - y];
+}
+
 // A single compositor surface contains both WebGL canvases and all the UI.
 // Filtering that surface keeps lettering, cards and scenery in the same lens.
 export class SingularityTransition {
@@ -38,7 +49,8 @@ export class SingularityTransition {
     this.makeField();
   }
 
-  makeField() {
+  makeField(width = innerWidth, height = innerHeight) {
+    this.fieldAspect = width / height;
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = 256;
     const context = canvas.getContext("2d");
@@ -47,14 +59,13 @@ export class SingularityTransition {
       for (let x = 0; x < 256; x++) {
         // Cover the filter's padded bounds too. A transparent displacement field
         // outside the viewport would sample a second, detached copy of its edge.
-        const u = ((x + 0.5) / 128 - 1) * 2;
-        const v = ((y + 0.5) / 128 - 1) * 2;
-        const radius = Math.hypot(u, v);
-        const bend = 0.24 + Math.exp(-radius * radius * 1.4) * 0.72;
-        const twist = Math.exp(-radius * radius * 1.1) * 0.68;
+        const u = (((x + 0.5) / 128 - 1) * 2 * width) / Math.min(width, height);
+        const v =
+          (((y + 0.5) / 128 - 1) * 2 * height) / Math.min(width, height);
+        const [dx, dy] = vortexOffset(u, v);
         const i = (y * 256 + x) * 4;
-        field.data[i] = (0.5 + (u * bend - v * twist) * 0.48) * 255;
-        field.data[i + 1] = (0.5 + (v * bend + u * twist) * 0.48) * 255;
+        field.data[i] = (0.5 + dx / 4) * 255;
+        field.data[i + 1] = (0.5 + dy / 4) * 255;
         field.data[i + 2] = 128;
         field.data[i + 3] = 255;
       }
@@ -72,6 +83,8 @@ export class SingularityTransition {
     this.onComplete = onComplete;
     this.width = innerWidth;
     this.height = innerHeight;
+    if (this.fieldAspect !== this.width / this.height)
+      this.makeField(this.width, this.height);
     const dpr = Math.min(devicePixelRatio, 1.5);
     this.light.width = Math.round(this.width * dpr);
     this.light.height = Math.round(this.height * dpr);
@@ -113,15 +126,15 @@ export class SingularityTransition {
     this.timeline
       .to(this.state, {
         scale: 1.035,
-        warp: -0.12,
+        turn: 3,
+        warp: 0.025,
         split: 0.18,
         duration: 0.3,
         ease: "sine.inOut",
       })
       .to(this.state, {
         scale: 0.009,
-        turn: 10,
-        warp: 1,
+        turn: 180,
         split: 1,
         core: 1,
         round: 50,
@@ -135,8 +148,6 @@ export class SingularityTransition {
       })
       .to(this.state, {
         core: 1.2,
-        turn: -8,
-        warp: -0.85,
         duration: 0.2,
         ease: "sine.inOut",
       })
@@ -146,8 +157,8 @@ export class SingularityTransition {
       })
       .to(this.state, {
         scale: 1.035,
-        turn: 0.8,
-        warp: 0.075,
+        turn: 355,
+        warp: 0.03,
         split: 0.2,
         core: 0,
         round: 0,
@@ -157,12 +168,19 @@ export class SingularityTransition {
       })
       .to(this.state, {
         scale: 1,
-        turn: 0,
+        turn: 360,
         warp: 0,
         split: 0,
         duration: 0.6,
         ease: "sine.inOut",
       });
+    // Wind the centre before the picture becomes small, so the spiral remains
+    // visible instead of reading as a rigid rectangle spinning away.
+    this.timeline.to(
+      this.state,
+      { warp: 1, duration: 0.8, ease: "power2.inOut" },
+      0.3,
+    );
     this.stage.dataset.phase = "collapse";
     return this.timeline;
   }
@@ -181,7 +199,7 @@ export class SingularityTransition {
     this.maps.forEach((map, i) => {
       map.setAttribute(
         "scale",
-        strength * s.warp * 0.72 + (i - 1) * strength * s.split * 0.045,
+        strength * s.warp * 2 + (i - 1) * strength * s.split * 0.035,
       );
     });
     this.drawLight();
