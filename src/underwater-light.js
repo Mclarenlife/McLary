@@ -4,6 +4,12 @@ export const underwaterLight = /* glsl */ `
   uniform float time;
   uniform float aspect;
   uniform vec2 pointer;
+  uniform vec3 deep;
+  uniform vec3 shallow;
+  uniform vec3 beam;
+  uniform vec3 direction;
+  uniform float strength;
+  uniform float night;
   varying vec2 vUv;
   float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
   float noise(vec2 p){
@@ -21,8 +27,8 @@ export const underwaterLight = /* glsl */ `
     vec2 uv=vUv+pointer*.006;
     float depth=max(0.,1.-uv.y);
     vec2 q=vec2((uv.x-.5)*aspect,depth);
-    vec3 color=mix(vec3(.004,.031,.048),vec3(.035,.23,.28),exp(-depth*2.8));
-    vec2 source=vec2(-.24,-.38);
+    vec3 color=mix(deep,shallow,exp(-depth*2.8));
+    vec2 source=vec2(direction.x*.85,-.18-direction.y*.55);
     float shafts=0.;
     for(int i=0;i<14;i++){
       float s=(float(i)+.5)/14.;
@@ -37,13 +43,19 @@ export const underwaterLight = /* glsl */ `
     }
     shafts/=14.;
     float envelope=exp(-pow((q.x+.19)/(1.+depth*.8),2.));
-    color+=vec3(.18,.35,.33)*shafts*envelope;
+    color+=beam*shafts*envelope*strength*.58;
     float surfaceBand=exp(-depth*24.);
     vec2 surfaceUV=vec2(q.x*8./(.18+depth),1./(.10+depth));
-    color+=vec3(.08,.18,.17)*caustic(surfaceUV)*surfaceBand;
-    color+=vec3(.10,.23,.23)*exp(-depth*9.)*exp(-pow((q.x+.22)*1.2,2.));
+    color+=beam*.24*strength*caustic(surfaceUV)*surfaceBand;
+    color+=beam*.34*strength*exp(-depth*9.)*exp(-pow((q.x-source.x)*1.2,2.));
     float haze=noise(uv*vec2(9.,5.)+vec2(time*.018,-time*.025));
-    color+=vec3(.004,.012,.014)*haze;
+    color+=shallow*.045*haze;
+    // Sparse nocturnal plankton glow drifts independently of the light shafts.
+    vec2 plankton=uv*vec2(aspect,1.)*38.+vec2(time*.08,time*.14);
+    vec2 cell=floor(plankton), f=fract(plankton)-.5;
+    float seed=hash(cell);
+    float glow=step(.976,seed)*exp(-dot(f,f)*110.)*pow(.5+.5*sin(time*.65+seed*90.),3.);
+    color+=vec3(.035,.36,.38)*glow*night*smoothstep(.02,.45,depth);
     color*=1.-.19*pow(abs(uv.x-.5)*2.,2.);
     gl_FragColor=vec4(color,1.);
   }

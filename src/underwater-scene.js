@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { SeaVisitors } from "./sea-visitors.js";
 import { underwaterLight } from "./underwater-light.js";
+import { DayCycle } from "./day-cycle.js";
 
 const backgroundVertex = /* glsl */ `
   varying vec2 vUv;
@@ -140,7 +141,7 @@ class BubbleTrail {
 }
 
 export class UnderwaterScene {
-  constructor() {
+  constructor(day = new DayCycle("noon")) {
     this.group = new THREE.Group();
     this.group.visible = false;
     this.time = { value: 0 };
@@ -151,6 +152,12 @@ export class UnderwaterScene {
         vertexShader: backgroundVertex,
         fragmentShader: underwaterLight,
         uniforms: {
+          deep: day.uniforms.deep,
+          shallow: day.uniforms.shallow,
+          beam: day.uniforms.beam,
+          direction: day.uniforms.direction,
+          strength: day.uniforms.strength,
+          night: day.uniforms.night,
           time: this.time,
           aspect: { value: innerWidth / innerHeight },
           pointer: { value: new THREE.Vector2() },
@@ -172,7 +179,11 @@ export class UnderwaterScene {
       ),
     );
     const material = new THREE.ShaderMaterial({
-      uniforms: { time: this.time },
+      uniforms: {
+        time: this.time,
+        seaHaze: day.uniforms.shallow,
+        daylight: day.uniforms.daylight,
+      },
       side: THREE.DoubleSide,
       vertexShader: /* glsl */ `
         uniform float time;
@@ -191,13 +202,15 @@ export class UnderwaterScene {
         }
       `,
       fragmentShader: /* glsl */ `
+        uniform vec3 seaHaze;
+        uniform float daylight;
         varying vec3 vNormal;
         varying float distanceToCamera;
         void main() {
           float light = pow(max(0., normalize(vNormal).y), 2.);
           vec3 fish = mix(vec3(.011, .065, .075), vec3(.12, .27, .28), light);
           float haze = smoothstep(22., 75., distanceToCamera);
-          gl_FragColor = vec4(mix(fish, vec3(.025, .16, .20), haze * .85), 1.);
+          gl_FragColor = vec4(mix(fish*(.15+daylight*.85), seaHaze*.6, haze * .85), 1.);
         }
       `,
     });
@@ -205,7 +218,7 @@ export class UnderwaterScene {
     this.fish.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.fish.frustumCulled = false;
     this.group.add(this.fish);
-    this.visitors = new SeaVisitors();
+    this.visitors = new SeaVisitors(day);
     this.group.add(this.visitors.group);
     this.transform = new THREE.Object3D();
     this.update(0, 0, new THREE.Vector2());

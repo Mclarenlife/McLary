@@ -12,26 +12,26 @@ const noise = /* glsl */ `
 const vertex = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`;
 
 export class OceanAtmosphere {
-  constructor() {
+  constructor(day) {
     this.group = new THREE.Group();
     this.time = { value: 0 };
     // Detailed cloud formations come from the licensed panoramic sky dome.
     const fog = new THREE.Mesh(
       new THREE.PlaneGeometry(200, 150),
       new THREE.ShaderMaterial({
-        uniforms: { time: this.time },
+        uniforms: { time: this.time, fogColor: day.uniforms.fog },
         transparent: true,
         depthWrite: false,
         side: THREE.DoubleSide,
         vertexShader: vertex,
         fragmentShader: /* glsl */ `
-        uniform float time; varying vec2 vUv; ${noise}
+        uniform float time; uniform vec3 fogColor; varying vec2 vUv; ${noise}
         void main(){
           vec2 p=vUv-.5;
           float bank=fbm(vec3(vUv*vec2(9.,5.)+vec2(time*.009,0.),time*.015));
           float edge=smoothstep(0.,.18,vUv.x)*(1.-smoothstep(.8,1.,vUv.x))*sin(vUv.y*3.14159);
           float alpha=smoothstep(.28,.76,bank)*edge*.19;
-          gl_FragColor=vec4(.78,.88,.88,alpha);
+          gl_FragColor=vec4(fogColor,alpha);
         }
       `,
       }),
@@ -75,7 +75,7 @@ export class OceanAtmosphere {
       side: THREE.DoubleSide,
       roughness: 0.9,
     });
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 6; i++) {
       const bird = new THREE.Group();
       const body = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6), white);
       body.scale.set(0.1, 0.12, 0.35);
@@ -89,7 +89,7 @@ export class OceanAtmosphere {
         bird.add(wing);
       }
       bird.userData.wings = wings;
-      bird.scale.setScalar(0.62 + i * 0.1);
+      bird.scale.setScalar(0.58 + (i % 3) * 0.12);
       this.group.add(bird);
       this.gulls.push(bird);
     }
@@ -97,11 +97,11 @@ export class OceanAtmosphere {
   update(time, motion) {
     this.time.value = time;
     this.gulls.forEach((bird, i) => {
-      const t = time * 0.075 + i * 0.62;
+      const t = time * (0.055 + i * 0.007) + i * 1.17;
       bird.position.set(
         Math.sin(t) * 21,
-        16 + i * 1.25 + Math.sin(time * 0.24 + i) * 0.65,
-        -60 - Math.cos(t) * 10 - i * 5,
+        13 + (i % 3) * 2.4 + Math.sin(time * 0.24 + i) * 1.1,
+        -49 - Math.cos(t) * 10 - i * 3,
       );
       bird.rotation.y = -t + 0.8;
       bird.userData.wings.forEach((wing, j) => {

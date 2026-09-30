@@ -372,6 +372,164 @@ header > * {
 .sound i:nth-child(4) {
   animation-delay: 0.6s;
 }
+.bottom-right {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.time-control {
+  position: relative;
+}
+.time-toggle {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: white;
+  transition:
+    background 0.6s,
+    color 0.6s,
+    transform 0.4s;
+}
+.time-toggle:hover {
+  transform: rotate(18deg);
+}
+.time-toggle svg {
+  width: 21px;
+  height: 21px;
+  stroke: currentColor;
+  stroke-width: 1.2;
+}
+.time-rays {
+  transform-origin: 12px 12px;
+  animation: day-orbit 32s linear infinite;
+}
+.time-toggle[aria-expanded="true"] {
+  transform: rotate(90deg);
+}
+.time-options {
+  position: absolute;
+  right: 0;
+  bottom: 56px;
+  width: 168px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 20px;
+  background: rgba(244, 241, 234, 0.93);
+  color: #25282c;
+  backdrop-filter: blur(18px);
+  box-shadow: 0 12px 40px #03151d26;
+  transform-origin: bottom right;
+  animation: time-unfold 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.time-options[hidden] {
+  display: none;
+}
+.time-options button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 12px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  text-align: left;
+}
+.time-options button:hover {
+  background: #202b3010;
+}
+.time-options button[aria-pressed="true"] {
+  background: #253136;
+  color: #fff;
+}
+.time-check {
+  margin-left: auto;
+  opacity: 0;
+}
+[aria-pressed="true"] .time-check {
+  opacity: 1;
+}
+.time-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.time-dot-system {
+  background: linear-gradient(90deg, #8cbdd0 50%, #28334e 50%);
+  border: 1px solid #a3b2bc;
+}
+.time-dot-morning {
+  background: linear-gradient(#edb59e, #efdfb9);
+}
+.time-dot-noon {
+  background: linear-gradient(#64bed7, #e7f5ee);
+}
+.time-dot-afternoon {
+  background: linear-gradient(#e79872, #d6b4be);
+}
+.time-dot-night {
+  background: #233958;
+  box-shadow: inset -3px -2px #bfcede;
+}
+.dark-header .time-toggle,
+.night-ocean .time-toggle {
+  background: #f5efea;
+  color: #292524;
+}
+.night-ocean:not(.gallery-view) header,
+.night-ocean:not(.gallery-view) .bottom,
+.night-ocean .hero,
+.night-ocean .contact-copy {
+  color: #f3e9e3;
+}
+.night-ocean .sound,
+.night-ocean .globe {
+  background: #f5efea;
+  color: #292524;
+}
+.night-ocean .time-options {
+  background: rgba(15, 29, 45, 0.94);
+  border-color: #a4bbd333;
+  color: #e9eff6;
+}
+.night-ocean .time-options button[aria-pressed="true"] {
+  background: #edf2f4;
+  color: #253136;
+}
+.gallery-view .time-control {
+  display: none;
+}
+@keyframes day-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes time-unfold {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .time-rays,
+  .time-options {
+    animation: none;
+  }
+}
+@media (max-width: 650px) {
+  body:not(.gallery-view) .bottom .play-link {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+  }
+}
 .play-link {
   position: absolute;
   left: 50%;

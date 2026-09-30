@@ -10,22 +10,27 @@ const RIPPLE_COUNT = 10;
 // Shared wave heights and analytic slopes keep the mesh and its reflection in sync.
 const waves = /* glsl */ `
   uniform float waveTime;
+  uniform float swell;
   uniform vec4 waterRipples[${RIPPLE_COUNT}];
   vec3 wave(vec2 p, vec2 direction, float frequency, float speed, float amplitude) {
-    float phase = dot(p, direction) * frequency + waveTime * speed;
-    return vec3(sin(phase) * amplitude,
-      direction * (cos(phase) * frequency * amplitude));
+    vec2 crosswind = vec2(-direction.y, direction.x);
+    float packetPhase = dot(p, crosswind) * frequency * .19 + waveTime * .11 + frequency * 7.;
+    float packet = .64 + .36 * sin(packetPhase);
+    vec2 packetSlope = crosswind * frequency * .19 * .36 * cos(packetPhase);
+    float bendPhase = dot(p, crosswind) * frequency * .31 - waveTime * .09;
+    float phase = dot(p, direction) * frequency + waveTime * speed + .65 * sin(bendPhase);
+    vec2 phaseSlope = direction * frequency + crosswind * frequency * .31 * .65 * cos(bendPhase);
+    return vec3(sin(phase) * amplitude * packet,
+      amplitude * (cos(phase) * phaseSlope * packet + sin(phase) * packetSlope));
   }
   vec3 waterField(vec2 p) {
-    vec3 field = wave(p, vec2(.94, .34), .24, -.52, .15);
-    field += wave(p, vec2(.62, .78), .43, -.68, .075);
-    field += wave(p, vec2(-.38, .92), .79, .81, .033);
-    field += wave(p, vec2(.94, .34), 1.65, -.85, .046);
-    field += wave(p, vec2(-.38, .92), 2.7, 1.12, .026);
-    field += wave(p, vec2(.71, -.71), 4.8, -1.4, .012);
-    field += wave(p, vec2(.23, .97), 8.6, 1.75, .006);
-    field += wave(p, vec2(.87, .49), 13.7, -2.2, .003);
-    field += wave(p, vec2(-.57, .82), 21.3, 2.7, .0016);
+    vec3 field = wave(p, vec2(.94, .34), .18, -.46, .32);
+    field += wave(p, vec2(.62, .78), .327, -.61, .19);
+    field += wave(p, vec2(-.38, .92), .573, -.83, .10);
+    field += wave(p, vec2(.87, -.49), 1.113, -1.13, .053);
+    field += wave(p, vec2(.23, .97), 1.937, -1.54, .029);
+    field += wave(p, vec2(-.57, .82), 3.713, -2.1, .013);
+    field *= swell;
     for (int i = 0; i < ${RIPPLE_COUNT}; i++) {
       vec4 ripple = waterRipples[i];
       float age = waveTime - ripple.z;
@@ -44,7 +49,7 @@ const waves = /* glsl */ `
 `;
 
 export class WaterMotion {
-  constructor(renderer, scene, camera, water) {
+  constructor(renderer, scene, camera, water, day) {
     this.time = 0;
     this.nextWater = 0;
     this.nextScreen = 0;
@@ -64,6 +69,8 @@ export class WaterMotion {
     const material = water.material;
     material.uniforms.waveTime = this.waveTime;
     material.uniforms.waterRipples = this.ripples;
+    material.uniforms.swell = day.uniforms.swell;
+    material.uniforms.daylight = day.uniforms.daylight;
     material.vertexShader = material.vertexShader
       .replace(
         "void main() {",
@@ -73,26 +80,47 @@ export class WaterMotion {
     material.fragmentShader = material.fragmentShader
       .replace(
         "void main() {",
-        `${waves}\nvoid main() {\nvec3 waveData = waterField(worldPosition.xz);`,
+        `${waves}
+        uniform float daylight;
+        float seaHash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+        float seaNoise(vec2 p) {
+          vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+          return mix(mix(seaHash(i),seaHash(i+vec2(1,0)),f.x),mix(seaHash(i+vec2(0,1)),seaHash(i+1.),f.x),f.y);
+        }
+        float capillary(vec2 p) {
+          mat2 turn=mat2(.8,-.6,.6,.8);
+          vec2 drift=vec2(waveTime*.22,-waveTime*.16);
+          return seaNoise(p*.63+drift)*.57+seaNoise(turn*p*1.71-drift*.73)*.29+seaNoise(turn*turn*p*4.37+drift*1.19)*.14;
+        }
+        void main() {\nvec3 waveData = waterField(worldPosition.xz);`,
+      )
+      .replace(
+        "vec4 noise = getNoise( worldPosition.xz * size );",
+        `
+        vec2 seaP = worldPosition.xz;
+        float fine = capillary(seaP);
+        vec2 grain = vec2(capillary(seaP+vec2(.08,0.))-fine,capillary(seaP+vec2(0.,.08))-fine)/.08;
+        float resolve = 1.-smoothstep(.12,1.6,length(fwidth(seaP)));
+        vec4 noise = vec4(grain * resolve,0.,0.);
+      `,
       )
       .replace(
         "normalize( noise.xzy * vec3( 1.5, 1.0, 1.5 ) )",
-        "normalize(vec3(-waveData.y, 1.0, -waveData.z) + vec3(noise.x, 0.0, noise.y) * .19)",
+        "normalize(vec3(-waveData.y-noise.x*.12, 1.0, -waveData.z-noise.y*.12))",
       )
       .replace(
         "sunLight( surfaceNormal, eyeDirection, 100.0, 2.0, 0.5, diffuseLight, specularLight );",
-        "sunLight( surfaceNormal, eyeDirection, 210.0, 3.8, 0.35, diffuseLight, specularLight );",
+        "sunLight( surfaceNormal, eyeDirection, 85.0, 1.7, 0.35, diffuseLight, specularLight );",
       )
       .replace(
         "vec3 outgoingLight = albedo;",
         /* glsl */ `
         // Deep water absorbs red light; grazing angles retain the real sky reflection.
-        vec3 deepWater = mix(vec3(.008,.065,.085), waterColor*.48, .55);
-        albedo = mix(deepWater + albedo*.46, albedo, reflectance*.68+.16);
-        float ridge = smoothstep(.10,.27,waveData.x) * smoothstep(.08,.24,length(waveData.yz));
-        float lace = pow(max(0.,noise.x + noise.y + .38),3.);
-        float foam = clamp(ridge * lace,0.,.13);
-        vec3 outgoingLight = albedo + vec3(.44,.58,.56)*foam + specularLight*.12;
+        vec3 deepWater = waterColor * (.17 + .2*daylight);
+        albedo = mix(deepWater + albedo*.53, albedo, reflectance*.7+.12);
+        float ridge = smoothstep(.26,.56,waveData.x) * smoothstep(.12,.29,length(waveData.yz));
+        float foam = ridge * smoothstep(.58,.78,fine) * .13 * daylight;
+        vec3 outgoingLight = albedo + vec3(.44,.58,.56)*foam + specularLight*.09;
       `,
       );
 

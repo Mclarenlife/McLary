@@ -8,6 +8,7 @@ import { PhotoGlobe } from "./photo-globe.js";
 import { profile } from "./content.js";
 import gsap from "gsap";
 import { WaterMotion } from "./water-motion.js";
+import { DayCycle } from "./day-cycle.js";
 
 // Scene geometry and interaction are authored for this project. The gallery's
 // bundled geographic data is credited in public/earth.
@@ -42,6 +43,8 @@ export class PortfolioScene {
     this.dragOffset = 0;
     this.dragging = false;
     this.entered = false;
+    this.day = new DayCycle();
+    this.timeCheck = 0;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color("#d9d7e4");
     this.scene.fog = new THREE.Fog("#d7e3e1", 65, 260);
@@ -73,7 +76,8 @@ export class PortfolioScene {
     env.dispose();
     pmrem.dispose();
     this.scene.environmentIntensity = 0.65;
-    this.scene.add(new THREE.HemisphereLight("#f8edf0", "#737488", 2.1));
+    this.ambient = new THREE.HemisphereLight("#f8edf0", "#737488", 2.1);
+    this.scene.add(this.ambient);
     const sun = new THREE.DirectionalLight("#fff0d7", 4.3);
     sun.position.set(-9, 14, 6);
     sun.castShadow = true;
@@ -91,25 +95,16 @@ export class PortfolioScene {
     sun.shadow.radius = 4;
     sun.target.position.set(0, 0, -5);
     this.scene.add(sun, sun.target);
+    this.sunLight = sun;
     const fill = new THREE.DirectionalLight("#c5d4ff", 1.4);
     fill.position.set(9, 8, -12);
     this.scene.add(fill);
-    this.ocean = new OceanScene(profile.email);
+    this.fillLight = fill;
+    this.ocean = new OceanScene(profile.email, this.day);
     this.scene.add(this.ocean.group);
-    const normal = texture(256, (x, y) => {
-      const u = (x / 256) * Math.PI * 2,
-        v = (y / 256) * Math.PI * 2;
-      const dx =
-        0.35 * Math.cos(u * 3 + Math.sin(v * 2)) +
-        0.22 * Math.cos(u * 7 - v * 5);
-      const dy = 0.2 * Math.cos(v * 4 + u * 2) + 0.14 * Math.sin(v * 8 - u * 3);
-      const n = new THREE.Vector3(dx, dy, 1).normalize();
-      return [
-        (n.x * 0.5 + 0.5) * 255,
-        (n.y * 0.5 + 0.5) * 255,
-        (n.z * 0.5 + 0.5) * 255,
-      ];
-    });
+    // Water's API requires a normal sampler; all actual detail is now computed
+    // in world space by WaterMotion, without a repeated texture tile.
+    const normal = texture(1, () => [128, 128, 255]);
     const waterSegments = innerWidth < 600 ? 96 : 192;
     const waterGeometry = new THREE.PlaneGeometry(
       600,
@@ -148,8 +143,9 @@ export class PortfolioScene {
       this.scene,
       this.camera,
       this.water,
+      this.day,
     );
-    this.underwater = new UnderwaterScene();
+    this.underwater = new UnderwaterScene(this.day);
     this.scene.add(this.underwater.group);
     this.photoGallery = new PhotoGlobe();
     this.scene.add(this.photoGallery.group);
@@ -173,7 +169,7 @@ export class PortfolioScene {
         this.page === "gallery" &&
         e.pointerType !== "touch" &&
         !this.dragging &&
-        !e.target.closest("a,button,.menu,.dialog,.intro")
+        !e.target.closest("a,button,.menu,.dialog,.intro,.time-control")
       ) {
         this.photoGallery.setPointer(e.clientX, e.clientY);
       } else this.photoGallery.clearPointer();
@@ -341,10 +337,7 @@ export class PortfolioScene {
     this.water.visible = !["work", "gallery"].includes(page);
     this.ocean.group.visible = oceanPage;
     this.particles.visible = false;
-    this.scene.fog.color.set(oceanPage ? "#d7e3e1" : "#e1e1e5");
-    this.water.material.uniforms.waterColor.value.set(
-      oceanPage ? "#5798a8" : "#8c839d",
-    );
+    this.applyDayLighting(page);
     gsap.to(this.view, {
       ...target,
       duration: this.reduced || immediate ? 0 : this.entered ? 2.6 : 0,
@@ -418,10 +411,50 @@ export class PortfolioScene {
       overwrite: true,
     });
   }
+  setTimeMode(mode) {
+    this.day.setMode(mode, this.reduced);
+  }
+  applyDayLighting(page = this.page) {
+    const u = this.day.uniforms;
+    const gallery = page === "gallery";
+    if (gallery) this.sunLight.color.set("#fff0d7");
+    else this.sunLight.color.copy(u.sun.value);
+    this.sunLight.intensity = gallery ? 4.3 : u.sunPower.value;
+    if (gallery) this.sunLight.position.set(-9, 14, 6);
+    else
+      this.sunLight.position
+        .copy(u.direction.value)
+        .multiplyScalar(25)
+        .add(this.sunLight.target.position);
+    this.ambient.intensity = gallery ? 2.1 : u.ambient.value;
+    this.fillLight.intensity = gallery ? 1.4 : 0.25 + u.daylight.value * 1.15;
+    this.scene.environmentIntensity = gallery
+      ? 0.65
+      : 0.16 + u.daylight.value * 0.49;
+    if (gallery) this.scene.fog.color.set("#e1e1e5");
+    else this.scene.fog.color.copy(u.fog.value);
+    this.water.material.uniforms.waterColor.value.copy(u.water.value);
+    this.water.material.uniforms.sunColor.value
+      .copy(u.sun.value)
+      .multiplyScalar(0.28 + u.daylight.value * 0.72);
+    this.water.material.uniforms.sunDirection.value.copy(u.direction.value);
+  }
   render() {
     if (document.hidden) return;
     this.clock.update();
     const delta = Math.min(this.clock.getDelta(), 0.05);
+    this.timeCheck += delta;
+    if (this.timeCheck > 5) {
+      this.day.resolve();
+      this.timeCheck = 0;
+    }
+    this.day.update(delta, this.reduced);
+    this.applyDayLighting();
+    document.body.classList.toggle(
+      "night-ocean",
+      this.day.uniforms.night.value > 0.45,
+    );
+    document.body.dataset.timeOfDay = this.day.resolved;
     this.waterMotion.update(delta, this.reduced);
     const t = this.waterMotion.time;
     const motion = this.reduced ? 0 : 1;

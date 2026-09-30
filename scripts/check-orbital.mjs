@@ -123,6 +123,13 @@ live.surfaceCamera.lookAt(0, 4.5, -32);
 live.surfaceRotation = live.surfaceCamera.quaternion.clone();
 live.target = {};
 live.scene = {
+  day: {
+    uniforms: {
+      fog: { value: new THREE.Color("#d7e3e1") },
+      water: { value: new THREE.Color("#5798a8") },
+    },
+  },
+  applyDayLighting() {},
   scene: stateScene,
   reduced: false,
   smoothPointer: new THREE.Vector2(0.35, -0.22),

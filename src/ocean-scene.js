@@ -37,7 +37,7 @@ function sailPoint(u, v, time = 0) {
 }
 
 export class OceanScene {
-  constructor(email) {
+  constructor(email, day) {
     this.group = new THREE.Group();
     this.group.name = "Open ocean — sun, clouds and sailboat";
     this.reveal = { value: 0 };
@@ -48,8 +48,13 @@ export class OceanScene {
         side: THREE.BackSide,
         depthWrite: false,
         uniforms: {
-          top: { value: new THREE.Color("#80bfdc") },
-          horizon: { value: new THREE.Color("#f6eada") },
+          top: day.uniforms.top,
+          horizon: day.uniforms.horizon,
+          skyTint: day.uniforms.tint,
+          skyExposure: day.uniforms.exposure,
+          night: day.uniforms.night,
+          sunDirection: day.uniforms.direction,
+          sunTint: day.uniforms.sun,
           skyMap: { value: null },
           skyReady: { value: 0 },
           skyTime: { value: 0 },
@@ -57,18 +62,27 @@ export class OceanScene {
         vertexShader: `varying vec3 direction; void main(){ direction=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
         fragmentShader: `
           uniform vec3 top; uniform vec3 horizon; uniform sampler2D skyMap;
+          uniform vec3 skyTint; uniform float skyExposure; uniform float night;
+          uniform vec3 sunDirection; uniform vec3 sunTint;
           uniform float skyReady; uniform float skyTime; varying vec3 direction;
           void main(){
             vec3 d=normalize(direction); float y=d.y;
             vec2 uv=vec2(fract(.5+atan(d.z,d.x)/6.2831853+.403+skyTime*.00006),clamp(.5+asin(clamp(y,-1.,1.))*2.7/3.1415927,.01,.99));
             uv.x+=sin(uv.y*18.+skyTime*.025)*.0007;
             vec3 captured=texture2D(skyMap,uv).rgb;
-            captured=mix(vec3(dot(captured,vec3(.2126,.7152,.0722))),captured,.72)*1.6;
+            float luminance=dot(captured,vec3(.2126,.7152,.0722));
+            captured=mix(vec3(luminance),captured,.48)*skyTint*skyExposure;
             vec3 base=mix(horizon,top,smoothstep(-.02,.48,y));
             vec3 color=mix(base,captured,skyReady*smoothstep(-.01,.075,y)*.90);
-            float sunDot=dot(d,normalize(vec3(-.33,.22,-.92)));
+            float sunDot=dot(d,normalize(sunDirection));
             float disc=smoothstep(.99960,.99986,sunDot);
-            color+=vec3(2.8,2.25,1.55)*disc+vec3(.22,.17,.09)*exp(-(1.-sunDot)*190.);
+            float crescent=1.-smoothstep(.99959,.99986,dot(d,normalize(sunDirection+vec3(.015,.006,0.))));
+            color+=sunTint*(disc*mix(3.2,crescent*1.9,night)+mix(.24,.055,night)*exp(-(1.-sunDot)*230.));
+            vec2 starUV=vec2(atan(d.z,d.x),asin(d.y))*160.;
+            vec2 cell=floor(starUV), f=fract(starUV)-.5;
+            float seed=fract(sin(dot(cell,vec2(127.1,311.7)))*43758.5453);
+            float star=step(.986,seed)*exp(-dot(f,f)*130.)*(.65+.35*sin(skyTime*.7+seed*157.));
+            color+=vec3(.52,.67,.9)*star*night*smoothstep(.03,.22,y)*(1.-clamp(luminance*1.5,0.,.85));
             gl_FragColor=vec4(color,1.);
           }`,
       }),
@@ -114,7 +128,7 @@ export class OceanScene {
     this.halo = halo;
     this.group.add(halo);
 
-    this.atmosphere = new OceanAtmosphere();
+    this.atmosphere = new OceanAtmosphere(day);
     this.group.add(this.atmosphere.group);
 
     this.boat = new THREE.Group();

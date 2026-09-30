@@ -228,16 +228,17 @@ export class OrbitalTransition {
       fog = scene.scene.fog.color.clone();
     const target = renderer.getRenderTarget();
     const ocean = this.surfacePage !== "work";
+    scene.applyDayLighting(this.surfacePage);
     layers.forEach(
       (layer, i) => (layer.visible = [ocean, ocean, !ocean, false][i]),
     );
     scene.scene.background.set(ocean ? "#d9d7e4" : "#0c5268");
-    scene.scene.fog.color.set(ocean ? "#d7e3e1" : "#e1e1e5");
+    scene.scene.fog.color.copy(scene.day.uniforms.fog.value);
     const waterColor = scene.water.material.uniforms.waterColor.value.clone();
     const reveal = scene.ocean.reveal.value;
     if (ocean) {
       scene.water.material.uniforms.waterColor.value.copy(
-        this.surfaceWaterColor,
+        scene.day.uniforms.water.value,
       );
       scene.ocean.reveal.value = this.surfacePage === "contact" ? 1 : 0;
     }
@@ -255,6 +256,7 @@ export class OrbitalTransition {
       scene.ocean.reveal.value = reveal;
       scene.scene.background.copy(background);
       scene.scene.fog.color.copy(fog);
+      scene.applyDayLighting();
       this.patch.visible = true;
     }
     if (import.meta.env?.DEV)

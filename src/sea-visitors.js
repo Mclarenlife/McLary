@@ -23,7 +23,8 @@ const bend = (kind) => /* glsl */ `
 `;
 
 export class SeaVisitors {
-  constructor() {
+  constructor(day) {
+    this.day = day;
     this.group = new THREE.Group();
     this.time = 0;
     this.swimTime = { value: 0 };
@@ -47,6 +48,9 @@ export class SeaVisitors {
           material.roughness = Math.max(0.4, material.roughness);
           material.onBeforeCompile = (shader) => {
             shader.uniforms.swimTime = this.swimTime;
+            shader.uniforms.seaHaze = this.day.uniforms.shallow;
+            shader.fragmentShader =
+              "uniform vec3 seaHaze;\n" + shader.fragmentShader;
             shader.vertexShader = bend(kind) + shader.vertexShader;
             shader.vertexShader = shader.vertexShader.replace(
               "#include <begin_vertex>",
@@ -66,7 +70,7 @@ export class SeaVisitors {
               "#include <opaque_fragment>",
               `
             float depthHaze = 1.-exp(-length(vViewPosition)*.024);
-            outgoingLight = mix(outgoingLight*.65, vec3(.016,.13,.17), depthHaze*.80);
+            outgoingLight = mix(outgoingLight*.65, seaHaze*.55, depthHaze*.80);
             #include <opaque_fragment>
           `,
             );
