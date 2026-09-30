@@ -485,6 +485,12 @@ header > * {
 .night-ocean .contact-copy {
   color: #f3e9e3;
 }
+.night-ocean .pill:not(.outline) {
+  color: var(--ink);
+}
+.night-ocean .pill:not(.outline):hover {
+  color: white;
+}
 .night-ocean .sound,
 .night-ocean .globe {
   background: #f5efea;

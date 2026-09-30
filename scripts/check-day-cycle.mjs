@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { sampleWaveField } from "../src/wave-spectrum.js";
 import {
   DayCycle,
   timeAtHour,
@@ -65,4 +66,28 @@ for (const mode of ["morning", "noon", "afternoon", "night"]) {
 }
 console.log(
   "Day cycle checks passed: local-time boundaries, safe persistence fallback, smooth frame-independent interpolation, reduced motion and finite palettes.",
+);
+for (const time of [0, 3, 16, 43]) {
+  const x = 6.1,
+    z = -4,
+    epsilon = 0.0001;
+  const sea = sampleWaveField(x, z, time);
+  const dx =
+    (sampleWaveField(x + epsilon, z, time).height -
+      sampleWaveField(x - epsilon, z, time).height) /
+    (2 * epsilon);
+  const dz =
+    (sampleWaveField(x, z + epsilon, time).height -
+      sampleWaveField(x, z - epsilon, time).height) /
+    (2 * epsilon);
+  assert(
+    Math.abs(dx - sea.dx) < 1e-6 && Math.abs(dz - sea.dz) < 1e-6,
+    "Buoyancy slopes must match the varying wave height",
+  );
+  assert(
+    Math.abs(sampleWaveField(x, z, time, 1.2).height - sea.height * 1.2) < 1e-8,
+  );
+}
+console.log(
+  "Wave buoyancy checks passed: analytic slopes and shared swell scaling.",
 );

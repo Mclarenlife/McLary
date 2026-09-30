@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { OceanAtmosphere } from "./ocean-atmosphere.js";
 import { loadMarineModel } from "./marine-models.js";
+import { sampleWaveField } from "./wave-spectrum.js";
 
 export const BOAT_SCALE = 0.68;
 export const boatPosition = (mobile) => ({ x: mobile ? 2.1 : 6.1, z: -4 });
@@ -38,6 +39,7 @@ function sailPoint(u, v, time = 0) {
 
 export class OceanScene {
   constructor(email, day) {
+    this.day = day;
     this.group = new THREE.Group();
     this.group.name = "Open ocean — sun, clouds and sailboat";
     this.reveal = { value: 0 };
@@ -310,11 +312,17 @@ export class OceanScene {
 
   update(time, motion) {
     this.sky.material.uniforms.skyTime.value = time * motion;
-    this.boat.position.y = 0.16 + Math.sin(time * 0.7) * 0.035 * motion;
+    const sea = sampleWaveField(
+      this.boat.position.x,
+      this.boat.position.z,
+      time,
+      this.day.uniforms.swell.value,
+    );
+    this.boat.position.y = 0.16 + sea.height;
     this.boat.rotation.set(
-      Math.sin(time * 0.55) * 0.012 * motion,
+      THREE.MathUtils.clamp(Math.atan(-sea.dz) * 0.7, -0.075, 0.075),
       -0.16 + Math.sin(time * 0.3) * 0.015 * motion,
-      Math.sin(time * 0.8) * 0.014 * motion,
+      THREE.MathUtils.clamp(Math.atan(sea.dx) * 0.7, -0.075, 0.075),
     );
     const positions = this.sail.geometry.attributes.position,
       uv = this.sailCoordinates;

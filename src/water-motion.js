@@ -4,6 +4,7 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ScenePush } from "./scene-push.js";
+import { waveFieldGLSL } from "./wave-spectrum.js";
 
 const RIPPLE_COUNT = 10;
 
@@ -24,12 +25,8 @@ const waves = /* glsl */ `
       amplitude * (cos(phase) * phaseSlope * packet + sin(phase) * packetSlope));
   }
   vec3 waterField(vec2 p) {
-    vec3 field = wave(p, vec2(.94, .34), .18, -.46, .32);
-    field += wave(p, vec2(.62, .78), .327, -.61, .19);
-    field += wave(p, vec2(-.38, .92), .573, -.83, .10);
-    field += wave(p, vec2(.87, -.49), 1.113, -1.13, .053);
-    field += wave(p, vec2(.23, .97), 1.937, -1.54, .029);
-    field += wave(p, vec2(-.57, .82), 3.713, -2.1, .013);
+    vec3 field = vec3(0.);
+    ${waveFieldGLSL}
     field *= swell;
     for (int i = 0; i < ${RIPPLE_COUNT}; i++) {
       vec4 ripple = waterRipples[i];

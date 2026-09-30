@@ -450,11 +450,13 @@ export class PortfolioScene {
     }
     this.day.update(delta, this.reduced);
     this.applyDayLighting();
-    document.body.classList.toggle(
-      "night-ocean",
-      this.day.uniforms.night.value > 0.45,
-    );
-    document.body.dataset.timeOfDay = this.day.resolved;
+    const night = this.day.uniforms.night.value > 0.45;
+    if (night !== this.nightUI) {
+      document.body.classList.toggle("night-ocean", night);
+      this.nightUI = night;
+    }
+    if (document.body.dataset.timeOfDay !== this.day.resolved)
+      document.body.dataset.timeOfDay = this.day.resolved;
     this.waterMotion.update(delta, this.reduced);
     const t = this.waterMotion.time;
     const motion = this.reduced ? 0 : 1;
