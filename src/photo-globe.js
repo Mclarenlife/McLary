@@ -93,7 +93,7 @@ export class PhotoGlobe {
       return response.json();
     };
     const [world, data, ...photos] = await Promise.all([
-      loadJSON("/earth/countries.json"),
+      loadJSON("/earth/countries.json?v=coastal-detail-2"),
       loadJSON("/earth/regions.json"),
       ...photographs.map((p) =>
         p.image ? loader.loadAsync(p.image) : Promise.resolve(null),
