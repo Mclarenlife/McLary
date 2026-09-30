@@ -1,18 +1,50 @@
 import gsap from "gsap";
+import * as THREE from "three";
+import { captureViewport } from "./scene-capture.js";
 
-// Inverse sampling rotates counterclockwise, so the visible image winds clockwise.
-// The centre turns more than the rim: this bends the picture into a spiral.
-export function vortexOffset(x, y) {
-  const radius2 = x * x + y * y;
-  const angle = -1.7 * Math.exp(-radius2 * 0.45);
-  const pinch = 1 + 0.14 * Math.exp(-radius2 * 0.4);
-  const c = Math.cos(angle),
-    s = Math.sin(angle);
-  return [(x * c - y * s) * pinch - x, (x * s + y * c) * pinch - y];
+// Inverse radial mapping in units of half the shortest viewport side.
+export function gravityOffset(x, y) {
+  const pull = 0.85 / (Math.hypot(x, y) + 0.08) ** 0.85;
+  return [x * pull, y * pull];
+}
+export function blackHoleLens(progress) {
+  const p = Math.max(0, Math.min(1, progress));
+  return {
+    pull: Math.min(100, 0.24 * (p / Math.max(0.00001, 1 - p)) ** 1.25),
+    warp: p ** 0.8,
+    split: Math.sin(p * Math.PI),
+    hidden: p >= 1,
+  };
 }
 
-// A single compositor surface contains both WebGL canvases and all the UI.
-// Filtering that surface keeps lettering, cards and scenery in the same lens.
+const fragmentShader = `
+  uniform sampler2D frame;
+  uniform vec2 resolution;
+  uniform float pull, warp, split, direction, hidden;
+  varying vec2 vUv;
+  vec3 sampleFrame(vec2 uv) {
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return vec3(0.00061, 0.00091, 0.00273);
+    return texture2D(frame, uv).rgb;
+  }
+  void main() {
+    vec2 aspect = resolution / min(resolution.x, resolution.y);
+    vec2 q = (vUv - 0.5) * aspect * 2.0;
+    float radius = length(q);
+    float sourceRadius = radius;
+    for (int i = 0; i < 2; i++)
+      sourceRadius += pull * sourceRadius * 0.85 / pow(sourceRadius + 0.08, 0.85);
+    // Exact polar sampling: the inner image winds much faster than the rim.
+    // Unlike rotating a DOM rectangle, each radius follows a different orbit.
+    float angle = atan(q.y, q.x) + direction * 12.0 * warp * exp(-sourceRadius * 1.65);
+    vec2 ray = vec2(cos(angle), sin(angle));
+    vec2 uv = 0.5 + ray * sourceRadius / aspect * 0.5;
+    vec2 dispersion = (ray + vec2(-ray.y, ray.x) * 0.45) / aspect * split * 0.0017;
+    vec3 color = vec3(sampleFrame(uv + dispersion).r, sampleFrame(uv).g, sampleFrame(uv - dispersion).b);
+    gl_FragColor = vec4(mix(color, vec3(0.00061, 0.00091, 0.00273), hidden), 1.0);
+    #include <colorspace_fragment>
+  }
+`;
+
 export class SingularityTransition {
   constructor() {
     this.stage = document.createElement("div");
@@ -22,126 +54,107 @@ export class SingularityTransition {
     document.body.prepend(this.stage);
     this.stage.append(this.world);
     this.world.append(...document.querySelectorAll("#scene,#grain,#app"));
-    this.filters = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "svg",
-    );
-    this.filters.setAttribute("class", "singularity-filters");
-    this.filters.setAttribute("aria-hidden", "true");
-    this.filters.innerHTML = `<defs><filter id="singularity-lens" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feImage result="field" preserveAspectRatio="none"/>
-      <feDisplacementMap in="SourceGraphic" in2="field" xChannelSelector="R" yChannelSelector="G" scale="0" result="spiral-a"/>
-      <feDisplacementMap in="spiral-a" in2="field" xChannelSelector="R" yChannelSelector="G" scale="0" result="spiral-b"/>
-      <feDisplacementMap in="spiral-b" in2="field" xChannelSelector="R" yChannelSelector="G" scale="0" result="red-warp"/>
-      <feColorMatrix in="red-warp" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="red"/>
-      <feDisplacementMap in="spiral-b" in2="field" xChannelSelector="R" yChannelSelector="G" scale="0" result="green-warp"/>
-      <feColorMatrix in="green-warp" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="green"/>
-      <feDisplacementMap in="spiral-b" in2="field" xChannelSelector="R" yChannelSelector="G" scale="0" result="blue-warp"/>
-      <feColorMatrix in="blue-warp" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="blue"/>
-      <feBlend in="red" in2="green" mode="screen" result="rg"/>
-      <feBlend in="rg" in2="blue" mode="screen"/>
-    </filter></defs>`;
-    document.body.append(this.filters);
-    this.maps = [...this.filters.querySelectorAll("feDisplacementMap")];
-    this.makeField();
-  }
-
-  makeField(width = innerWidth, height = innerHeight) {
-    this.fieldAspect = width / height;
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 256;
-    const context = canvas.getContext("2d");
-    const field = context.createImageData(256, 256);
-    for (let y = 0; y < 256; y++) {
-      for (let x = 0; x < 256; x++) {
-        // Cover the filter's padded bounds too. A transparent displacement field
-        // outside the viewport would sample a second, detached copy of its edge.
-        const u = (((x + 0.5) / 128 - 1) * 2 * width) / Math.min(width, height);
-        const v =
-          (((y + 0.5) / 128 - 1) * 2 * height) / Math.min(width, height);
-        const [dx, dy] = vortexOffset(u, v);
-        const i = (y * 256 + x) * 4;
-        field.data[i] = (0.5 + dx / 4) * 255;
-        field.data[i + 1] = (0.5 + dy / 4) * 255;
-        field.data[i + 2] = 128;
-        field.data[i + 3] = 255;
-      }
+    this.snapshot = document.createElement("canvas");
+    this.snapshot.width = this.snapshot.height = 1;
+    this.texture = new THREE.CanvasTexture(this.snapshot);
+    this.texture.colorSpace = THREE.SRGBColorSpace;
+    this.uniforms = {
+      frame: { value: this.texture },
+      resolution: { value: new THREE.Vector2(1, 1) },
+      pull: { value: 0 },
+      warp: { value: 0 },
+      split: { value: 0 },
+      direction: { value: 1 },
+      hidden: { value: 0 },
+    };
+    try {
+      this.renderer = new THREE.WebGLRenderer({
+        antialias: false,
+        alpha: false,
+      });
+      this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+      this.renderer.setSize(1, 1);
+      this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+      this.renderer.domElement.className = "singularity-canvas";
+      this.renderer.domElement.setAttribute("aria-hidden", "true");
+      this.stage.append(this.renderer.domElement);
+      this.scene = new THREE.Scene();
+      this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+      this.scene.add(
+        new THREE.Mesh(
+          new THREE.PlaneGeometry(2, 2),
+          new THREE.ShaderMaterial({
+            uniforms: this.uniforms,
+            vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+            fragmentShader,
+            depthTest: false,
+            depthWrite: false,
+          }),
+        ),
+      );
+      // Compile before the welcome screen is dismissed, not on the first click.
+      this.renderer.compile(this.scene, this.camera);
+      this.renderer.render(this.scene, this.camera);
+    } catch {
+      this.renderer?.dispose();
+      this.renderer = null;
     }
-    context.putImageData(field, 0, 0);
-    this.filters
-      .querySelector("feImage")
-      .setAttribute("href", canvas.toDataURL());
   }
 
-  start(swap, onComplete) {
+  capture() {
+    // The overlay covers this synchronous refresh: the unwarped page never flashes.
+    this.world.style.visibility = "";
+    captureViewport(this.snapshot, this.beforeCapture);
+    this.texture.dispose();
+    this.texture = new THREE.CanvasTexture(this.snapshot);
+    this.texture.colorSpace = THREE.SRGBColorSpace;
+    this.uniforms.frame.value = this.texture;
+    this.world.style.visibility = "hidden";
+  }
+
+  start(swap, onComplete, beforeCapture) {
     this.cancel();
     this.swapped = false;
     this.swap = swap;
     this.onComplete = onComplete;
-    this.width = innerWidth;
-    this.height = innerHeight;
-    if (this.fieldAspect !== this.width / this.height)
-      this.makeField(this.width, this.height);
-    const filter = this.filters.querySelector("filter");
-    const field = this.filters.querySelector("feImage");
-    for (const [key, value] of Object.entries({
-      x: -this.width * 0.5,
-      y: -this.height * 0.5,
-      width: this.width * 2,
-      height: this.height * 2,
-    }))
-      filter.setAttribute(key, value);
-    for (const [key, value] of Object.entries({
-      x: -this.width * 0.5,
-      y: -this.height * 0.5,
-      width: this.width * 2,
-      height: this.height * 2,
-    }))
-      field.setAttribute(key, value);
-    this.state = {
-      scale: 1,
-      turn: 0,
-      warp: 0,
-      split: 0,
-      round: 0,
-    };
+    this.beforeCapture = beforeCapture;
+    if (!this.renderer) {
+      this.commit();
+      this.finish();
+      return gsap.timeline();
+    }
+    this.renderer.setSize(innerWidth, innerHeight);
+    this.uniforms.resolution.value.set(innerWidth, innerHeight);
+    this.uniforms.direction.value = 1;
+    this.state = { progress: 0 };
     this.stage.classList.add("is-active");
+    this.stage.dataset.phase = "collapse";
     document.documentElement.classList.add("singularity-active");
     this.world.inert = true;
+    this.capture();
     this.update();
     this.timeline = gsap.timeline({
       onUpdate: () => this.update(),
       onComplete: () => this.finish(),
     });
-    // Two continuous strokes, with no anticipation, hold, overshoot or settling.
-    // At the route swap the entire old frame has exactly zero visible area.
     this.timeline
       .to(this.state, {
-        scale: 0,
-        turn: 540,
-        split: 1,
-        round: 50,
-        duration: 1.1,
-        ease: (t) => 0.5 * t + 0.5 * t * t,
+        progress: 1,
+        duration: 1.3,
+        ease: (t) => 0.22 * t + 0.78 * t ** 2.4,
       })
       .call(() => {
-        this.world.style.visibility = "hidden";
         this.commit();
+        this.capture();
+        // Unwinding the opposite pose continues the same clockwise travel.
+        this.uniforms.direction.value = -1;
         this.stage.dataset.phase = "burst";
-        this.world.style.visibility = "";
       })
       .to(this.state, {
-        scale: 1,
-        turn: 1080,
-        warp: 0,
-        split: 0,
-        round: 0,
-        duration: 1.1,
-        ease: (t) => 1 - 0.45 * (1 - t) - 0.55 * (1 - t) ** 2,
+        progress: 0,
+        duration: 1.3,
+        ease: (t) => 1 - 0.4 * (1 - t) - 0.6 * (1 - t) ** 2.4,
       });
-    // Build a three-stage spatial spiral while the picture is still large.
-    this.timeline.to(this.state, { warp: 1, duration: 0.72, ease: "none" }, 0);
-    this.stage.dataset.phase = "collapse";
     return this.timeline;
   }
 
@@ -150,39 +163,33 @@ export class SingularityTransition {
     this.swapped = true;
     this.swap?.();
   }
-
   update() {
-    const s = this.state;
-    this.world.style.transform = `scale(${s.scale}) rotate(${s.turn}deg)`;
-    this.world.style.borderRadius = `${Math.sqrt(s.round / 50) * 50}%`;
-    const strength = Math.min(this.width, this.height);
-    this.maps.forEach((map, i) => {
-      map.setAttribute(
-        "scale",
-        strength * s.warp * 2 +
-          (i < 2 ? 0 : i - 3) * strength * s.split * 0.035,
-      );
-    });
+    const lens = blackHoleLens(this.state.progress);
+    if (import.meta.env?.DEV)
+      this.stage.dataset.progress = this.state.progress.toFixed(2);
+    for (const key of ["pull", "warp", "split"])
+      this.uniforms[key].value = lens[key];
+    this.uniforms.hidden.value = Number(lens.hidden);
+    this.renderer.render(this.scene, this.camera);
   }
-
   finish() {
     const done = this.onComplete;
     this.cancel();
     done?.();
   }
-
   cancel() {
     this.timeline?.kill();
     this.timeline = null;
     this.stage.classList.remove("is-active");
     delete this.stage.dataset.phase;
+    delete this.stage.dataset.progress;
     document.documentElement.classList.remove("singularity-active");
     this.world.inert = false;
     this.world.removeAttribute("style");
     this.swap = null;
     this.onComplete = null;
+    this.beforeCapture = null;
   }
-
   complete() {
     if (!this.timeline) return;
     this.commit();

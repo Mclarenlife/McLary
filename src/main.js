@@ -163,6 +163,10 @@ function navigate(path) {
       () => {
         if (scene) scene.singularityActive = false;
       },
+      () => {
+        scene?.render();
+        if (page() === "work") galleryMotion?.renderFrame(true);
+      },
     );
     if (
       import.meta.env.DEV &&

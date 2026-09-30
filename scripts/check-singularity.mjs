@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import {
   SingularityTransition,
-  vortexOffset,
+  gravityOffset,
+  blackHoleLens,
 } from "../src/singularity-transition.js";
 const classes = () => {
   const values = new Set();
@@ -23,9 +24,18 @@ effect.world = {
     effect.world.style = {};
   },
 };
-effect.filters = { querySelector: () => ({ setAttribute() {} }) };
-effect.update = () => {};
-effect.makeField = () => {};
+effect.renderer = { setSize() {}, render() {} };
+effect.uniforms = Object.fromEntries(
+  ["resolution", "direction", "pull", "warp", "split", "hidden"].map((key) => [
+    key,
+    { value: key === "resolution" ? { set() {} } : 0 },
+  ]),
+);
+let captures = 0;
+effect.capture = () => {
+  captures++;
+  effect.world.style.visibility = "hidden";
+};
 let swaps = 0,
   completions = 0;
 const begin = () =>
@@ -35,9 +45,9 @@ const begin = () =>
         swaps++;
         assert.equal(effect.world.style.visibility, "hidden");
         assert.equal(
-          effect.state.scale,
-          0,
-          "Swap only at a truly invisible point",
+          effect.state.progress,
+          1,
+          "Swap only at the invisible singularity",
         );
       },
       () => completions++,
@@ -54,80 +64,84 @@ const clean = () => {
   assert.equal(effect.timeline, null);
 };
 let timeline = begin();
-timeline.totalTime(0.04, false);
-assert(
-  effect.state.scale < 0.99 && effect.state.warp > 0,
-  "Movement starts immediately, with no anticipation",
+timeline.totalTime(0.05, false);
+assert(effect.state.progress > 0, "Begin moving immediately");
+assert.equal(
+  effect.world.style.transform,
+  undefined,
+  "Never scale or rotate the rectangular page",
 );
-timeline.totalTime(1.09, false);
+assert.equal(
+  effect.world.style.borderRadius,
+  undefined,
+  "Never shrink a rounded rectangular frame",
+);
+timeline.totalTime(1.29, false);
 assert.equal(swaps, 0);
-assert(effect.state.scale < 0.015);
-timeline.totalTime(1.1, false);
+timeline.totalTime(1.3, false);
 assert.equal(swaps, 1);
-assert.equal(effect.state.scale, 0);
+assert.equal(effect.world.style.visibility, "hidden");
 assert.equal(effect.stage.dataset.phase, "burst");
-timeline.totalTime(1.11, false);
-assert(
-  effect.state.scale > 0.01,
-  "Release begins immediately with no singularity hold",
-);
-timeline.totalTime(2.16, false);
-assert(
-  effect.state.scale < 0.985,
-  "No nearly stationary tail before completion",
-);
+timeline.totalTime(1.31, false);
+assert(effect.state.progress < 1, "No pause at the singularity");
+assert.equal(effect.world.style.visibility, "hidden");
+assert.equal(captures, 2, "Capture only at endpoints");
+timeline.totalTime(2.55, false);
+assert(effect.state.progress > 0.01, "No stationary settling tail");
 timeline.totalTime(timeline.duration(), false);
 assert.equal(completions, 1);
-assert.equal(effect.state.scale, 1);
-assert.equal(effect.state.warp, 0);
-assert.equal(effect.state.split, 0);
+assert.equal(effect.state.progress, 0);
+assert.deepEqual(blackHoleLens(0), {
+  pull: 0,
+  warp: 0,
+  split: 0,
+  hidden: false,
+});
+assert(blackHoleLens(1).hidden);
 clean();
 
-// Follow inverse samples through all three real filter stages, including the
-// radius changes between stages. Both halves must continue clockwise.
-timeline = effect
-  .start(
-    () => {},
-    () => {},
-  )
-  .pause();
-const radii = [0.05, 0.3, 0.7, 1.2, 2];
-const previous = radii.map(() => 0);
-let strongestTwist = 0;
-for (let t = 0; t <= 2.2; t += 0.005) {
-  timeline.totalTime(t, false);
-  radii.forEach((radius, i) => {
-    let x = radius,
-      y = 0,
-      twist = 0;
-    for (let layer = 0; layer < 3; layer++) {
-      const [dx, dy] = vortexOffset(x, y);
-      const nx = x + dx * effect.state.warp,
-        ny = y + dy * effect.state.warp;
-      twist += Math.atan2(x * ny - y * nx, x * nx + y * ny);
-      x = nx;
-      y = ny;
-    }
-    strongestTwist = Math.max(strongestTwist, -twist);
-    const visible = (effect.state.turn * Math.PI) / 180 - twist;
-    assert(
-      visible >= previous[i] - 0.00001,
-      "The composed spiral must not reverse",
-    );
-    previous[i] = visible;
-  });
+// Invert the actual two-stage gravitational sampling field to track content.
+// Different radii must fall at different rates: uniform page scaling fails this.
+function projectedRadius(source, progress) {
+  const strength = blackHoleLens(progress).pull;
+  let lo = 0,
+    hi = source;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    let sample = mid;
+    for (let pass = 0; pass < 2; pass++)
+      sample += gravityOffset(sample, 0)[0] * strength;
+    if (sample > source) hi = mid;
+    else lo = mid;
+  }
+  return (lo + hi) / 2;
+}
+const inner = projectedRadius(0.25, 0.65) / 0.25;
+const rim = projectedRadius(1.4, 0.65) / 1.4;
+assert(
+  inner < rim * 0.7,
+  "Centre falls faster than the rim, stretching the picture radially",
+);
+let previous = 1;
+for (let p = 0; p < 1; p += 0.01) {
+  const position = projectedRadius(1, p);
+  assert(
+    position <= previous + 1e-8,
+    "Content must fall continuously inward without folds or duplicates",
+  );
+  previous = position;
 }
 assert(
-  strongestTwist > 4.8,
-  "Centre deformation must exceed 275 degrees, not just rigid rotation",
+  projectedRadius(1, 0.999) * 900 < 1,
+  "Collapse the content below one pixel before hiding",
 );
-effect.cancel();
-assert.equal(Math.hypot(...vortexOffset(0, 0)), 0);
+assert(Math.hypot(...gravityOffset(0, 0)) === 0, "The sink remains centred");
+
 timeline = begin();
 timeline.totalTime(0.4, false);
 effect.cancel();
 timeline.totalTime(timeline.duration(), false);
-assert.equal(swaps, 1, "Cancellation must not commit an abandoned route");
+assert.equal(swaps, 1);
 clean();
 timeline = effect
   .start(
@@ -142,11 +156,11 @@ assert.equal(swaps, 2);
 assert.equal(completions, 2);
 clean();
 timeline = begin();
-timeline.totalTime(1.3, false);
+timeline.totalTime(1.5, false);
 effect.complete();
-assert.equal(swaps, 3, "Resize after the swap must not push history twice");
+assert.equal(swaps, 3);
 assert.equal(completions, 3);
 clean();
 console.log(
-  "Singularity checks passed: immediate start/release, zero-area swap, no tail, >275-degree spatial twist, clockwise motion, clean endpoint and interruption handling.",
+  "Black-hole checks passed: pixel-space differential gravity, continuous inward pull, subpixel singularity, no document scale/rotation, immediate nonlinear start/release, route swap and interruption cleanup.",
 );

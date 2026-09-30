@@ -24,10 +24,14 @@ body {
 .singularity-world {
   display: contents;
 }
-.singularity-filters {
-  position: fixed;
-  width: 0;
-  height: 0;
+.singularity-canvas {
+  display: none;
+}
+.singularity-stage.is-active > .singularity-canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 200;
   pointer-events: none;
 }
 .singularity-active {
@@ -48,9 +52,6 @@ body {
   inset: 0;
   overflow: hidden;
   isolation: isolate;
-  transform-origin: 50% 50%;
-  filter: url("#singularity-lens");
-  will-change: transform, filter;
 }
 button,
 a {
