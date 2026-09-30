@@ -7,7 +7,7 @@ assert.equal(wav.toString("ascii", 0, 4), "RIFF");
 assert.equal(wav.readUInt16LE(22), 2);
 const rate = wav.readUInt32LE(24),
   frames = wav.readUInt32LE(40) / 4;
-assert.equal(frames / rate, 30);
+assert.equal(frames / rate, 60);
 let peak = 0,
   energy = 0;
 for (let i = 44; i < wav.length; i += 2) {
@@ -63,7 +63,7 @@ globalThis.AudioContext = class {
     return Promise.resolve();
   }
   decodeAudioData() {
-    return Promise.resolve({ duration: 30 });
+    return Promise.resolve({ duration: 60 });
   }
   createBufferSource() {
     return {
@@ -101,5 +101,5 @@ assert.equal(player.source.loop, true);
 await player.setEnabled(false);
 clearTimeout(player.suspendTimer);
 console.log(
-  "Music checks passed: 30-second stereo PCM, headroom, continuous seam, gesture unlock and rapid-toggle safety.",
+  "Music checks passed: 60-second stereo PCM, headroom, continuous seam, gesture unlock and rapid-toggle safety.",
 );

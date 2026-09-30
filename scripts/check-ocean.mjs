@@ -59,7 +59,9 @@ for (const [width, height] of [
   [2560, 1080],
 ]) {
   for (const mode of ["morning", "noon", "afternoon"]) {
-    const direction = new DayCycle(mode).uniforms.direction.value;
+    const day = new DayCycle(mode);
+    day.setAspect(width / height);
+    const direction = day.uniforms.direction.value;
     for (const [x, y] of [
       [0, 0],
       [-0.5, -0.5],

@@ -1,11 +1,11 @@
 import fs from "node:fs";
 
-// Original 8-bar score, 64 BPM, C major. No samples or third-party recordings.
+// Original eight-phrase score, 48 BPM, C major. No third-party recordings.
 // Notes and diffuse echoes are summed on a circular timeline, including tails
 // from the preceding repetition. AudioBufferSourceNode loops this exact PCM.
 const rate = 22050,
-  beat = 60 / 64,
-  seconds = 32 * beat;
+  beat = 60 / 48,
+  seconds = 48 * beat;
 const length = Math.round(rate * seconds);
 const channels = [new Float64Array(length), new Float64Array(length)];
 const chords = [
@@ -39,17 +39,17 @@ const taps = [
 ];
 function note(midi, when, volume, pan, decay) {
   const frequency = 440 * 2 ** ((midi - 69) / 12);
-  const duration = 7;
+  const duration = 12;
   for (let i = 0; i < rate * duration; i++) {
     const t = i / rate,
       phase = 2 * Math.PI * frequency * t;
-    const attack = 1 - Math.exp(-t / 0.014);
+    const attack = 1 - Math.exp(-t / 0.075);
     const envelope =
       attack * Math.exp(-t / decay) * Math.max(0, 1 - (t / duration) ** 4);
     const tone =
       Math.sin(phase) +
-      0.19 * Math.sin(phase * 2) * Math.exp(-t / 0.7) +
-      0.055 * Math.sin(phase * 3) * Math.exp(-t / 0.35);
+      0.1 * Math.sin(phase * 2) * Math.exp(-t / 0.7) +
+      0.025 * Math.sin(phase * 3) * Math.exp(-t / 0.35);
     const sample = tone * envelope * volume;
     for (const [delay, gain, spread] of taps) {
       const index = (Math.round((when + delay) * rate) + i) % length;
@@ -60,23 +60,21 @@ function note(midi, when, volume, pan, decay) {
   }
 }
 chords.forEach((chord, bar) => {
-  const start = bar * 4 * beat;
-  note(chord[0], start, 0.12, -0.08, 1.3);
-  [1, 2, 3, 2].forEach((part, j) =>
+  const start = bar * 6 * beat;
+  note(chord[0], start, 0.1, -0.08, 2.2);
+  [1, 3].forEach((part, j) =>
     note(
       chord[part],
-      start + (j * 0.875 + 0.25) * beat,
-      0.075 + (j === 0 ? 0.015 : 0),
+      start + (j * 3 + 0.7) * beat,
+      0.065,
       (j % 2 ? 1 : -1) * 0.22,
-      1.05,
+      2.5,
     ),
   );
-  melody[bar].forEach((pitch, j) =>
-    note(pitch, start + (j * 2 + 0.65) * beat, 0.105, j ? 0.13 : -0.13, 1.7),
-  );
+  note(melody[bar][0], start + 2.2 * beat, 0.075, -0.13, 3.2);
 });
 // One-pole low-pass, warmed for two cycles to preserve continuity at the seam.
-const smoothing = 1 - Math.exp((-2 * Math.PI * 2800) / rate);
+const smoothing = 1 - Math.exp((-2 * Math.PI * 1900) / rate);
 for (const channel of channels) {
   let state = 0;
   for (let pass = 0; pass < 2; pass++)

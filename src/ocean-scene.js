@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { OceanAtmosphere } from "./ocean-atmosphere.js";
 import { loadMarineModel } from "./marine-models.js";
 import { sampleWaveField } from "./wave-spectrum.js";
+import { BoatLighting } from "./boat-lighting.js";
 
 export const BOAT_SCALE = 0.68;
 export const boatPosition = (mobile) => ({ x: mobile ? 2.1 : 6.1, z: -4 });
@@ -251,6 +252,7 @@ export class OceanScene {
     this.boat.add(
       new THREE.Line(ropes, new THREE.LineBasicMaterial({ color: "#ded0b5" })),
     );
+    this.lighting = new BoatLighting(this.boat, day);
     this.setLayout(innerWidth < 650);
     this.update(0, 0);
   }
@@ -277,6 +279,8 @@ export class OceanScene {
     this.boat.remove(this.hullPlaceholder);
     this.hullPlaceholder.traverse((part) => part.geometry?.dispose());
     this.boat.add(hull);
+    this.lighting.bindHull(hull);
+    this.lighting.update(0, 0);
     const ctx = this.clothCanvas.getContext("2d");
     ctx.fillStyle = "#fffdf7";
     ctx.fillRect(0, 0, 1536, 1536);
@@ -311,6 +315,7 @@ export class OceanScene {
   }
 
   update(time, motion) {
+    this.lighting.update(time, motion);
     this.sky.material.uniforms.skyTime.value = time * motion;
     const sea = sampleWaveField(
       this.boat.position.x,

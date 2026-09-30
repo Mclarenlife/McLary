@@ -38,7 +38,7 @@ const palettes = {
     beam: "#f4d8a2",
     fog: "#d1d3c7",
     sun: "#ffddb1",
-    direction: [-0.09, 0.18, -1],
+    direction: [-0.19, 0.15, -1],
     exposure: 1.32,
     daylight: 0.85,
     night: 0,
@@ -76,7 +76,7 @@ const palettes = {
     beam: "#ffc38d",
     fog: "#d4b9ad",
     sun: "#ffba78",
-    direction: [0.09, 0.165, -1],
+    direction: [0.19, 0.135, -1],
     exposure: 1.12,
     daylight: 0.68,
     night: 0,
@@ -128,6 +128,8 @@ const numberKeys = [
 
 export class DayCycle {
   constructor(mode = savedTimeMode()) {
+    this.aspect =
+      typeof innerWidth === "number" ? innerWidth / innerHeight : 16 / 9;
     this.mode = validTimeMode(mode);
     this.uniforms = {};
     for (const key of colorKeys)
@@ -153,11 +155,23 @@ export class DayCycle {
         this.target,
         Object.fromEntries(numberKeys.map((key) => [key, preset[key]])),
       );
-      this.target.direction = new THREE.Vector3(
-        ...preset.direction,
-      ).normalize();
+      this.updateDirection();
     }
     if (immediate) this.update(1, true);
+  }
+  updateDirection() {
+    const [x, y, z] = palettes[this.resolved].direction;
+    const margin = this.aspect * 0.25;
+    this.target.direction = new THREE.Vector3(
+      this.resolved === "night" ? x : THREE.MathUtils.clamp(x, -margin, margin),
+      y,
+      z,
+    ).normalize();
+  }
+  setAspect(aspect) {
+    this.aspect = aspect;
+    this.updateDirection();
+    this.uniforms.direction.value.copy(this.target.direction);
   }
   update(delta, immediate = false) {
     const amount = immediate ? 1 : 1 - Math.exp(-delta * 1.65);

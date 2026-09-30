@@ -151,6 +151,7 @@ export class PortfolioScene {
     this.scene.add(this.photoGallery.group);
     this.addParticles();
     this.resize = () => {
+      this.day.setAspect(innerWidth / innerHeight);
       this.camera.aspect = innerWidth / innerHeight;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(innerWidth, innerHeight);

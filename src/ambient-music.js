@@ -20,7 +20,7 @@ export class AmbientMusic {
     // Unlock in the user's click before fetching/decoding, including mobile Safari.
     await this.context.resume();
     if (!this.bufferPromise) {
-      this.bufferPromise = fetch("/audio/tidal-notes.wav")
+      this.bufferPromise = fetch("/audio/tidal-notes.wav?v=2")
         .then((response) => {
           if (!response.ok) throw new Error("Music unavailable");
           return response.arrayBuffer();
