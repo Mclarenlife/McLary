@@ -163,10 +163,6 @@ function navigate(path) {
       () => {
         if (scene) scene.orbitalActive = false;
       },
-      () => {
-        scene?.render();
-        if (page() === "work") galleryMotion?.renderFrame(true);
-      },
       { scene, entering: nextPage === "gallery", destination: nextPage },
     );
     if (

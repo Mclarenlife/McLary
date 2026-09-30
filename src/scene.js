@@ -509,6 +509,7 @@ export class PortfolioScene {
         this.underwater.bubbles.items.length,
       );
     }
+    this.orbitalFlight?.renderSurface();
     this.waterMotion.render();
   }
 }

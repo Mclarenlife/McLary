@@ -36,7 +36,6 @@ for (const mobile of [false, true]) {
       pose.position.distanceTo(pose.target) > 0,
       "Valid camera direction throughout",
     );
-    assert(pose.natural >= 0 && pose.natural <= 1);
     previous = pose.altitude;
   }
   const end = orbitalPose(1, mobile);
@@ -45,25 +44,7 @@ for (const mobile of [false, true]) {
       1e-8,
   );
   assert(end.target.distanceTo(center) < 1e-8);
-  assert.equal(end.natural, 0);
   assert.equal(end.interface, 1);
-}
-// The tangent patch must initially cover the camera exactly, including tall phones.
-for (const aspect of [390 / 844, 1440 / 900]) {
-  const camera = new THREE.PerspectiveCamera(46, aspect, 0.0001, 80);
-  camera.position.copy(start.position);
-  camera.lookAt(start.target);
-  camera.updateMatrixWorld();
-  const height = 2 * (0.006 - 0.0001) * Math.tan(THREE.MathUtils.degToRad(23));
-  const corner = new THREE.Vector3((height * aspect) / 2, height / 2, 0)
-    .applyQuaternion(camera.quaternion)
-    .add(start.anchor)
-    .addScaledVector(start.normal, 0.0001)
-    .project(camera);
-  assert(
-    Math.abs(corner.x - 1) < 1e-7 && Math.abs(corner.y - 1) < 1e-7,
-    "No jump in initial framing",
-  );
 }
 const rootClasses = new Set();
 globalThis.document = {
@@ -82,7 +63,7 @@ effect.app = {
 };
 effect.patch = { visible: true };
 effect.material = { uniforms: { frame: { value: {} } } };
-effect.texture = {
+effect.target = {
   dispose() {
     disposed++;
   },
@@ -111,12 +92,69 @@ effect.complete();
 assert.equal(killed, 1);
 assert.equal(disposed, 1);
 assert.equal(done, 1);
-assert.equal(settled, 1);
+assert.equal(settled, 2);
 assert.equal(effect.app.inert, false);
 assert.equal(effect.patch.visible, false);
 assert.equal(effect.scene.orbitalFlight, null);
-assert.equal(effect.scene.photoGallery.material.uniforms.flight.value, 0);
 assert.equal(effect.app.dataset.flight, undefined);
+
+// Render two different live times, while preserving the gallery render state.
+const live = Object.create(OrbitalTransition.prototype);
+const stateScene = new THREE.Scene();
+stateScene.background = new THREE.Color("#050709");
+stateScene.fog = new THREE.Fog("#e1e1e5", 65, 260);
+let draws = 0,
+  animated = [];
+const savedTarget = { saved: true };
+let currentTarget = savedTarget;
+live.state = { progress: 0.1 };
+live.patch = { visible: true };
+live.app = { dataset: {} };
+live.surfacePage = "index";
+live.surfaceCamera = new THREE.PerspectiveCamera(46, 1.6, 0.1, 1200);
+live.surfaceStart = new THREE.Vector3(0, 8.4, 22);
+live.surfaceCamera.position.copy(live.surfaceStart);
+live.surfaceCamera.lookAt(0, 4.5, -32);
+live.surfaceRotation = live.surfaceCamera.quaternion.clone();
+live.target = {};
+live.scene = {
+  scene: stateScene,
+  reduced: false,
+  water: { visible: false },
+  ocean: { group: { visible: false }, update: (t) => animated.push(t) },
+  underwater: { group: { visible: false } },
+  photoGallery: { group: { visible: true } },
+  waterMotion: { time: 10 },
+  renderer: {
+    getRenderTarget: () => currentTarget,
+    setRenderTarget: (t) => (currentTarget = t),
+    render: (_scene, camera) => {
+      draws++;
+      assert(camera === live.surfaceCamera);
+      assert(live.scene.water.visible);
+      assert(!live.scene.photoGallery.group.visible);
+    },
+  },
+};
+live.renderSurface();
+const firstY = live.surfaceCamera.position.y;
+live.scene.waterMotion.time = 10.016;
+live.state.progress = 0.2;
+live.renderSurface();
+assert.equal(
+  draws,
+  2,
+  "Each frame redraws live geometry instead of sampling a screenshot",
+);
+assert.deepEqual(animated, [10, 10.016], "Ocean animation keeps advancing");
+assert(
+  live.surfaceCamera.position.y > firstY,
+  "The actual perspective camera rises",
+);
+assert.equal(currentTarget, savedTarget);
+assert(live.scene.photoGallery.group.visible);
+assert(!live.scene.water.visible);
+assert.equal(stateScene.background.getHexString(), "050709");
 console.log(
-  "Orbital checks passed: geographic anchor, continuous ascent, perspective framing, desktop/mobile endpoints and exactly-once cleanup.",
+  "Orbital checks passed: geographic anchor, continuous ascent, live ocean rendering, renderer state restoration, endpoints and cleanup.",
 );

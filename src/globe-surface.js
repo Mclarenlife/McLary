@@ -143,7 +143,6 @@ export function createGlobeMaterial() {
       magnification: { value: 1 },
       detail: { value: 0 },
       highlight: { value: 0 },
-      flight: { value: 0 },
     },
     vertexShader: /* glsl */ `
       varying vec3 localDirection; varying vec3 viewNormal; varying vec3 viewDirection;
@@ -157,7 +156,7 @@ export function createGlobeMaterial() {
     fragmentShader: /* glsl */ `
       uniform sampler2D worldMap; uniform sampler2D regionMap; uniform sampler2D contextMap;
       uniform vec4 regionBounds; uniform vec4 contextBounds; uniform vec3 focus;
-      uniform float magnification; uniform float detail; uniform float highlight; uniform float flight;
+      uniform float magnification; uniform float detail; uniform float highlight;
       varying vec3 localDirection; varying vec3 viewNormal; varying vec3 viewDirection;
       const float PI=3.14159265359;
       vec2 geographic(vec3 p) { return vec2(atan(-p.z,p.x)/ (2.*PI)+.5,asin(clamp(p.y,-1.,1.))/PI+.5); }
@@ -191,14 +190,6 @@ export function createGlobeMaterial() {
         float inside=step(0.,regionUv.x)*step(regionUv.x,1.)*step(0.,regionUv.y)*step(regionUv.y,1.);
         float region=texture2D(regionMap,clamp(regionUv,0.,1.)).r*inside;
         color=mix(color,vec3(.92)*(.85+.15*light),region*highlight);
-        // A temporary sea-to-orbit appearance resolves into the gallery palette.
-        float seaDetail=sin(uv.x*3600.+sin(uv.y*1500.)*2.)*sin(uv.y*2700.);
-        float cloud=sin(uv.x*145.+sin(uv.y*97.)*2.5)+sin(uv.y*183.+uv.x*72.);
-        cloud=smoothstep(.65,1.8,cloud)*.55;
-        vec3 natural=mix(vec3(.10,.30,.36)+seaDetail*.009,vec3(.24,.32,.23)*light,map.r);
-        natural=mix(natural,vec3(.72,.8,.82),cloud);
-        natural=mix(natural,vec3(.3,.48,.6),pow(1.-facing,3.)*.55);
-        color=mix(color,natural,flight);
         float edge=smoothstep(.0,mix(.055,.58,detail),facing);
         gl_FragColor=vec4(color,edge);
       }
