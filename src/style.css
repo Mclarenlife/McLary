@@ -491,6 +491,9 @@ header > * {
 .night-ocean .pill:not(.outline):hover {
   color: white;
 }
+.night-ocean.menu-open header {
+  color: #292524;
+}
 .night-ocean .sound,
 .night-ocean .globe {
   background: #f5efea;
