@@ -8,6 +8,7 @@ import { arrowDown, arrowUp, asterisk, orbitIcon } from "./icons.js";
 import { OrbitalTransition } from "./orbital-transition.js";
 
 import { bindTimeControl, timeControlMarkup } from "./time-control.js";
+import { AmbientMusic } from "./ambient-music.js";
 
 let timeControl;
 let scene;
@@ -450,32 +451,19 @@ function toggleMenu(force) {
   if (menuOpen) m.querySelector("a").focus();
 }
 let audio;
-function toggleSound(enabled = !soundOn) {
+async function toggleSound(enabled = !soundOn) {
   soundOn = enabled;
+  updateSoundButton();
   try {
-    if (!audio && soundOn) {
-      audio = new AudioContext();
-      const gain = audio.createGain();
-      gain.gain.value = 0.018;
-      gain.connect(audio.destination);
-      [130.81, 196, 261.63].forEach((freq, i) => {
-        const osc = audio.createOscillator(),
-          g = audio.createGain();
-        osc.type = "sine";
-        osc.frequency.value = freq;
-        g.gain.value = 1 / (i + 2);
-        osc.connect(g);
-        g.connect(gain);
-        osc.start();
-      });
-    }
-    if (audio) {
-      if (soundOn) audio.resume();
-      else audio.suspend();
-    }
+    if (!audio && soundOn) audio = new AmbientMusic();
+    await audio?.setEnabled(soundOn);
   } catch {
     soundOn = false;
+    audio?.setEnabled(false);
+    updateSoundButton();
   }
+}
+function updateSoundButton() {
   const button = document.querySelector(".sound");
   button.setAttribute("aria-pressed", String(soundOn));
   button.setAttribute(

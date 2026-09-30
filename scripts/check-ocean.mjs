@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { BOAT_SCALE, boatPosition, oceanView } from "../src/ocean-scene.js";
+import { DayCycle } from "../src/day-cycle.js";
+import { applyCameraView } from "../src/camera-pose.js";
 
 for (const [width, height] of [
   [1239, 950],
@@ -48,4 +50,39 @@ for (const [width, height] of [
 }
 console.log(
   "Ocean view checks passed: desktop/mobile boat placement, contact framing, perspective zoom.",
+);
+for (const [width, height] of [
+  [320, 1000],
+  [390, 844],
+  [768, 1024],
+  [1440, 900],
+  [2560, 1080],
+]) {
+  for (const mode of ["morning", "noon", "afternoon"]) {
+    const direction = new DayCycle(mode).uniforms.direction.value;
+    for (const [x, y] of [
+      [0, 0],
+      [-0.5, -0.5],
+      [0.5, 0.5],
+    ]) {
+      const camera = new THREE.PerspectiveCamera(46, width / height, 0.1, 800);
+      applyCameraView(
+        camera,
+        oceanView(false, width < 650),
+        "index",
+        new THREE.Vector2(x, y),
+        { mobile: width < 650 },
+      );
+      camera.updateMatrixWorld();
+      const p = direction.clone().multiplyScalar(380).project(camera);
+      const screen = { x: (p.x + 1) / 2, y: (1 - p.y) / 2 };
+      assert(
+        screen.x > 0.12 && screen.x < 0.88 && screen.y > 0.1 && screen.y < 0.35,
+        `${mode} sun must remain visible above the title at ${width}x${height}`,
+      );
+    }
+  }
+}
+console.log(
+  "Sun framing checks passed: three daylight states, five aspect ratios and pointer extremes.",
 );

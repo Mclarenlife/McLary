@@ -81,13 +81,13 @@ export class WaterMotion {
         uniform float daylight;
         float seaHash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
         float seaNoise(vec2 p) {
-          vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+          vec2 i=floor(p), f=fract(p); f=f*f*f*(f*(f*6.-15.)+10.);
           return mix(mix(seaHash(i),seaHash(i+vec2(1,0)),f.x),mix(seaHash(i+vec2(0,1)),seaHash(i+1.),f.x),f.y);
         }
         float capillary(vec2 p) {
           mat2 turn=mat2(.8,-.6,.6,.8);
           vec2 drift=vec2(waveTime*.22,-waveTime*.16);
-          return seaNoise(p*.63+drift)*.57+seaNoise(turn*p*1.71-drift*.73)*.29+seaNoise(turn*turn*p*4.37+drift*1.19)*.14;
+          return seaNoise(p*.53+drift)*.76+seaNoise(turn*p*1.23-drift*.73)*.24;
         }
         void main() {\nvec3 waveData = waterField(worldPosition.xz);`,
       )
@@ -96,18 +96,18 @@ export class WaterMotion {
         `
         vec2 seaP = worldPosition.xz;
         float fine = capillary(seaP);
-        vec2 grain = vec2(capillary(seaP+vec2(.08,0.))-fine,capillary(seaP+vec2(0.,.08))-fine)/.08;
-        float resolve = 1.-smoothstep(.12,1.6,length(fwidth(seaP)));
+        vec2 grain = vec2(capillary(seaP+vec2(.14,0.))-capillary(seaP-vec2(.14,0.)),capillary(seaP+vec2(0.,.14))-capillary(seaP-vec2(0.,.14)))/.28;
+        float resolve = 1.-smoothstep(.08,.7,length(fwidth(seaP)));
         vec4 noise = vec4(grain * resolve,0.,0.);
       `,
       )
       .replace(
         "normalize( noise.xzy * vec3( 1.5, 1.0, 1.5 ) )",
-        "normalize(vec3(-waveData.y-noise.x*.12, 1.0, -waveData.z-noise.y*.12))",
+        "normalize(vec3(-waveData.y-noise.x*.045, 1.0, -waveData.z-noise.y*.045))",
       )
       .replace(
         "sunLight( surfaceNormal, eyeDirection, 100.0, 2.0, 0.5, diffuseLight, specularLight );",
-        "sunLight( surfaceNormal, eyeDirection, 85.0, 1.7, 0.35, diffuseLight, specularLight );",
+        "sunLight( surfaceNormal, eyeDirection, 56.0, 1.2, 0.35, diffuseLight, specularLight );",
       )
       .replace(
         "vec3 outgoingLight = albedo;",

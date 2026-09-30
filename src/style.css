@@ -428,6 +428,9 @@ header > * {
   display: none;
 }
 .time-options button {
+  appearance: none;
+  background: transparent;
+  color: inherit;
   display: flex;
   align-items: center;
   gap: 11px;
@@ -507,6 +510,16 @@ header > * {
 .night-ocean .time-options button[aria-pressed="true"] {
   background: #edf2f4;
   color: #253136;
+}
+.night-ocean .time-options button[aria-pressed="false"] {
+  background: transparent;
+  color: #e9eff6;
+}
+.night-ocean .time-options button[aria-pressed="false"]:hover {
+  background: #ffffff14;
+}
+body:not(.work-view):not(.gallery-view) #grain {
+  opacity: 0;
 }
 .gallery-view .time-control {
   display: none;
