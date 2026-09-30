@@ -12,10 +12,10 @@ function canvasTexture(canvas) {
   return texture;
 }
 
-export function countryTexture(countries) {
+export function countryTexture(countries, width = 4096) {
   const canvas = document.createElement("canvas");
-  canvas.width = 4096;
-  canvas.height = 2048;
+  canvas.width = width;
+  canvas.height = width / 2;
   const ctx = canvas.getContext("2d");
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -23,15 +23,15 @@ export function countryTexture(countries) {
   // palette and lighting. Geographic polygons are rasterized only once at preload.
   for (const country of countries) {
     for (const polygon of country.polygons) {
-      for (const shift of [-4096, 0, 4096]) {
+      for (const shift of [-width, 0, width]) {
         ctx.beginPath();
         for (const ring of polygon) {
           let previous;
           ring.forEach(([lon, lat], i) => {
             let x = ((lon + 180) / 360) * canvas.width;
             if (previous !== undefined) {
-              while (x - previous > 2048) x -= 4096;
-              while (x - previous < -2048) x += 4096;
+              while (x - previous > width / 2) x -= width;
+              while (x - previous < -width / 2) x += width;
             }
             previous = x;
             const y = ((90 - lat) / 180) * canvas.height;
@@ -102,19 +102,19 @@ export function regionTexture(feature, bounds) {
   return canvasTexture(canvas);
 }
 
-export function contextTexture(context) {
+export function contextTexture(context, size = 2048) {
   const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 1536;
+  canvas.width = canvas.height = size;
   const ctx = canvas.getContext("2d");
   ctx.fillStyle = "black";
-  ctx.fillRect(0, 0, 1536, 1536);
+  ctx.fillRect(0, 0, size, size);
   const [x, y, w, h] = context.bounds;
   for (const polygon of context.polygons) {
     ctx.beginPath();
     for (const ring of polygon) {
       ring.forEach(([lon, lat], i) => {
-        const px = ((lon - x) / w) * 1536,
-          py = (1 - (lat - y) / h) * 1536;
+        const px = ((lon - x) / w) * size,
+          py = (1 - (lat - y) / h) * size;
         if (!i) ctx.moveTo(px, py);
         else ctx.lineTo(px, py);
       });
@@ -135,6 +135,8 @@ export function createGlobeMaterial() {
     depthWrite: false,
     uniforms: {
       worldMap: { value: null },
+      flightMap: { value: null },
+      flightBounds: { value: new THREE.Vector4() },
       regionMap: { value: null },
       regionBounds: { value: new THREE.Vector4() },
       contextMap: { value: null },
@@ -154,6 +156,7 @@ export function createGlobeMaterial() {
       }
     `,
     fragmentShader: /* glsl */ `
+      uniform sampler2D flightMap; uniform vec4 flightBounds;
       uniform sampler2D worldMap; uniform sampler2D regionMap; uniform sampler2D contextMap;
       uniform vec4 regionBounds; uniform vec4 contextBounds; uniform vec3 focus;
       uniform float magnification; uniform float detail; uniform float highlight;
@@ -174,6 +177,9 @@ export function createGlobeMaterial() {
         map+=(texture2D(worldMap,uv+vec2(blur,0.)).rg+texture2D(worldMap,uv-vec2(blur,0.)).rg)*.125;
         map+=(texture2D(worldMap,uv+vec2(0.,blur)).rg+texture2D(worldMap,uv-vec2(0.,blur)).rg)*.125;
         vec2 degrees=vec2((uv.x-.5)*360.,(uv.y-.5)*180.);
+        vec2 flightUv=(degrees-flightBounds.xy)/flightBounds.zw;
+        vec2 flightEdge=smoothstep(vec2(0.),vec2(.08),flightUv)*(1.-smoothstep(vec2(.92),vec2(1.),flightUv));
+        map=mix(map,texture2D(flightMap,clamp(flightUv,0.,1.)).rg,flightEdge.x*flightEdge.y);
         vec2 contextUv=(degrees-contextBounds.xy)/max(contextBounds.zw,vec2(.0001));
         vec2 contextEdge=smoothstep(vec2(0.),vec2(.12),contextUv)*(1.-smoothstep(vec2(.88),vec2(1.),contextUv));
         map=mix(map,texture2D(contextMap,clamp(contextUv,0.,1.)).rg,contextEdge.x*contextEdge.y*smoothstep(.4,1.,detail));

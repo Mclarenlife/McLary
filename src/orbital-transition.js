@@ -1,3 +1,4 @@
+import { applyCameraView } from "./camera-pose.js";
 import gsap from "gsap";
 import * as THREE from "three";
 import { oceanView } from "./ocean-scene.js";
@@ -97,6 +98,7 @@ export class OrbitalTransition {
       this.surfaceCamera.position.set(view.x, view.y, view.z);
       this.surfaceCamera.lookAt(view.tx, view.ty, view.tz);
     }
+    this.surfaceWaterColor = new THREE.Color("#5798a8");
     this.surfaceStart = this.surfaceCamera.position.clone();
     this.surfaceRotation = this.surfaceCamera.quaternion.clone();
     this.surfaceCamera.near = 0.1;
@@ -176,6 +178,25 @@ export class OrbitalTransition {
     if (!this.patch.visible) return;
     const scene = this.scene,
       renderer = scene.renderer;
+    if (!this.entering) {
+      const view =
+        this.surfacePage === "work"
+          ? { x: 0, y: 6.2, z: 20, tx: 0, ty: 6, tz: -9 }
+          : oceanView(this.surfacePage === "contact", innerWidth < 650);
+      applyCameraView(
+        this.surfaceCamera,
+        view,
+        this.surfacePage,
+        scene.smoothPointer,
+        {
+          mobile: innerWidth < 650,
+          reduced: scene.reduced,
+          contact: this.surfacePage === "contact" ? 1 : 0,
+        },
+      );
+      this.surfaceStart.copy(this.surfaceCamera.position);
+      this.surfaceRotation.copy(this.surfaceCamera.quaternion);
+    }
     const travel = smooth(0, 0.38, p);
     const rise = (Math.exp(travel * 6) - 1) * 0.4;
     this.surfaceCamera.position
@@ -203,6 +224,14 @@ export class OrbitalTransition {
     );
     scene.scene.background.set(ocean ? "#d9d7e4" : "#0c5268");
     scene.scene.fog.color.set(ocean ? "#d7e3e1" : "#e1e1e5");
+    const waterColor = scene.water.material.uniforms.waterColor.value.clone();
+    const reveal = scene.ocean.reveal.value;
+    if (ocean) {
+      scene.water.material.uniforms.waterColor.value.copy(
+        this.surfaceWaterColor,
+      );
+      scene.ocean.reveal.value = this.surfacePage === "contact" ? 1 : 0;
+    }
     const time = scene.waterMotion.time;
     if (ocean) scene.ocean.update(time, scene.reduced ? 0 : 1);
     else scene.underwater.update(time, 0, new THREE.Vector2());
@@ -213,6 +242,8 @@ export class OrbitalTransition {
     } finally {
       renderer.setRenderTarget(target);
       layers.forEach((layer, i) => (layer.visible = visibility[i]));
+      scene.water.material.uniforms.waterColor.value.copy(waterColor);
+      scene.ocean.reveal.value = reveal;
       scene.scene.background.copy(background);
       scene.scene.fog.color.copy(fog);
       this.patch.visible = true;

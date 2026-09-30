@@ -364,6 +364,42 @@ export class GalleryMotion {
     }
   }
 
+  leaveForRoute(done) {
+    this.cancelFilter();
+    this.filtering = true;
+    this.stage.setAttribute("aria-busy", "true");
+    this.filterFlight.value = this.current;
+    this.filterTimeline = gsap
+      .timeline({ onComplete: done })
+      .to(this.filterFlight, {
+        value: this.contentHeight + this.start - this.minimum + 16,
+        duration: 1.25,
+        ease: "power2.in",
+      });
+    return this.filterTimeline;
+  }
+  prepareRouteEntry() {
+    this.cancelFilter();
+    this.filtering = true;
+    this.stage.setAttribute("aria-busy", "true");
+    this.filterFlight.value = -(this.height - this.start + 320);
+    this.current = this.filterFlight.value;
+    this.target = 0;
+    this.renderFrame(true);
+  }
+  enterForRoute() {
+    this.filterTimeline = gsap
+      .timeline({
+        onComplete: () => {
+          this.filtering = false;
+          this.current = this.target = 0;
+          this.stage.setAttribute("aria-busy", "false");
+        },
+      })
+      .to(this.filterFlight, { value: 0, duration: 1.45, ease: "power3.out" });
+    return this.filterTimeline;
+  }
+
   switchCards(commit) {
     if (!this.ready || this.disposed || this.media.matches || !this.enabled) {
       commit();

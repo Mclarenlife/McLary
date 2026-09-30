@@ -33,7 +33,7 @@ function simplify(points) {
       split = i;
     }
   }
-  if (max <= 0.045) return [points[0], points.at(-1)];
+  if (max <= 0.008) return [points[0], points.at(-1)];
   return [
     ...simplify(points.slice(0, split + 1)).slice(0, -1),
     ...simplify(points.slice(split)),
@@ -118,8 +118,25 @@ const contexts = regions.features.map((f) => {
   );
   return { id: f.properties.id, bounds, polygons };
 });
+// Unsimplified coastal detail for the sea-to-space flight, independent of location filters.
+const flightBounds = [105, 15, 23, 22];
+const flightContext = {
+  bounds: flightBounds,
+  polygons: original.flatMap((country) =>
+    (country.geometry.type === "MultiPolygon"
+      ? country.geometry.coordinates
+      : [country.geometry.coordinates]
+    )
+      .map((polygon) =>
+        polygon
+          .map((ring) => clipRing(ring, flightBounds))
+          .filter((ring) => ring.length > 3),
+      )
+      .filter((polygon) => polygon.length),
+  ),
+};
 await fs.writeFile(
   "public/earth/countries.json",
-  JSON.stringify({ source: url, countries, contexts }),
+  JSON.stringify({ source: url, countries, contexts, flightContext }),
 );
 console.log(`Prepared ${countries.length} country geometries.`);

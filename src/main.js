@@ -150,26 +150,33 @@ function navigate(path) {
   const main = document.querySelector("main");
   const nextPage = pages[normalize(path)] || "404";
   if (nextPage === "gallery" || page() === "gallery") {
-    scene?.cancelTransition();
-    if (scene) scene.orbitalActive = true;
-    navigation = orbital.start(
-      () => {
-        history.pushState({}, "", path);
-        galleryEntry.value = 0;
-        showPage(false);
-        scene?.setPage(nextPage, true);
-        scene?.render();
-      },
-      () => {
-        if (scene) scene.orbitalActive = false;
-      },
-      { scene, entering: nextPage === "gallery", destination: nextPage },
-    );
-    if (
-      import.meta.env.DEV &&
-      new URLSearchParams(location.search).has("transition-study")
-    )
-      navigation.timeScale(0.2);
+    const beginFlight = () => {
+      scene?.cancelTransition();
+      if (scene) scene.orbitalActive = true;
+      navigation = orbital.start(
+        () => {
+          history.pushState({}, "", path);
+          galleryEntry.value = 0;
+          showPage(false);
+          if (nextPage === "work") galleryMotion?.prepareRouteEntry();
+          scene?.setPage(nextPage, true);
+          scene?.render();
+        },
+        () => {
+          if (scene) scene.orbitalActive = false;
+          if (nextPage === "work") navigation = galleryMotion?.enterForRoute();
+        },
+        { scene, entering: nextPage === "gallery", destination: nextPage },
+      );
+      if (
+        import.meta.env.DEV &&
+        new URLSearchParams(location.search).has("transition-study")
+      )
+        navigation.timeScale(0.2);
+    };
+    if (page() === "work" && galleryMotion?.ready)
+      navigation = galleryMotion.leaveForRoute(beginFlight);
+    else beginFlight();
     return;
   }
   if (
@@ -184,7 +191,7 @@ function navigate(path) {
     ".hero,.work-heading,.contact-copy,.play-title,.play-controls",
   );
   main.style.pointerEvents = "none";
-  const direction = nextPage === "index" ? -1 : 1;
+  const direction = ["index", "contact"].includes(nextPage) ? -1 : 1;
   scene?.beginTransition(direction, nextPage);
   let switched = false;
   navigation = gsap.timeline({

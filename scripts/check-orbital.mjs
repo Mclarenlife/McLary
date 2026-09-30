@@ -1,3 +1,6 @@
+import { applyCameraView } from "../src/camera-pose.js";
+import { oceanView } from "../src/ocean-scene.js";
+globalThis.innerWidth = 1440;
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import {
@@ -110,6 +113,8 @@ let currentTarget = savedTarget;
 live.state = { progress: 0.1 };
 live.patch = { visible: true };
 live.app = { dataset: {} };
+live.entering = true;
+live.surfaceWaterColor = new THREE.Color("#5798a8");
 live.surfacePage = "index";
 live.surfaceCamera = new THREE.PerspectiveCamera(46, 1.6, 0.1, 1200);
 live.surfaceStart = new THREE.Vector3(0, 8.4, 22);
@@ -120,8 +125,18 @@ live.target = {};
 live.scene = {
   scene: stateScene,
   reduced: false,
-  water: { visible: false },
-  ocean: { group: { visible: false }, update: (t) => animated.push(t) },
+  smoothPointer: new THREE.Vector2(0.35, -0.22),
+  water: {
+    visible: false,
+    material: {
+      uniforms: { waterColor: { value: new THREE.Color("#8c839d") } },
+    },
+  },
+  ocean: {
+    group: { visible: false },
+    reveal: { value: 0 },
+    update: (t) => animated.push(t),
+  },
   underwater: { group: { visible: false } },
   photoGallery: { group: { visible: true } },
   waterMotion: { time: 10 },
@@ -155,6 +170,39 @@ assert.equal(currentTarget, savedTarget);
 assert(live.scene.photoGallery.group.visible);
 assert(!live.scene.water.visible);
 assert.equal(stateScene.background.getHexString(), "050709");
+// A moving pointer must not change the optical pose when handing off from flight.
+for (const page of ["index", "contact"])
+  for (const pointer of [
+    new THREE.Vector2(0.45, -0.3),
+    new THREE.Vector2(-0.4, 0.25),
+  ]) {
+    live.entering = false;
+    live.surfacePage = page;
+    live.state.progress = 0;
+    live.scene.smoothPointer.copy(pointer);
+    live.renderSurface();
+    const normal = new THREE.PerspectiveCamera(46, 1.6, 0.1, 800);
+    applyCameraView(
+      normal,
+      oceanView(page === "contact", false),
+      page,
+      pointer,
+      { contact: page === "contact" ? 1 : 0 },
+    );
+    assert(
+      live.surfaceCamera.position.distanceTo(normal.position) < 1e-10,
+      "No return-position jump",
+    );
+    assert(
+      live.surfaceCamera.quaternion.angleTo(normal.quaternion) < 1e-7,
+      "No return-angle snap",
+    );
+  }
+assert.equal(
+  live.scene.water.material.uniforms.waterColor.value.getHexString(),
+  "8c839d",
+  "Offscreen ocean restores gallery render state",
+);
 console.log(
   "Orbital checks passed: geographic anchor, continuous ascent, live ocean rendering, renderer state restoration, endpoints and cleanup.",
 );

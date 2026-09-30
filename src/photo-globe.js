@@ -99,7 +99,22 @@ export class PhotoGlobe {
         p.image ? loader.loadAsync(p.image) : Promise.resolve(null),
       ),
     ]);
-    const map = countryTexture(world.countries);
+    const map = countryTexture(
+      world.countries,
+      Math.min(
+        renderer.capabilities.maxTextureSize,
+        innerWidth < 650 ? 4096 : 8192,
+      ),
+    );
+    const coast = contextTexture(
+      world.flightContext,
+      Math.min(renderer.capabilities.maxTextureSize, 4096),
+    );
+    renderer.initTexture(coast);
+    this.material.uniforms.flightMap.value = coast;
+    this.material.uniforms.flightBounds.value.set(
+      ...world.flightContext.bounds,
+    );
     renderer.initTexture(map);
     this.material.uniforms.worldMap.value = map;
     for (const feature of data.features) {

@@ -1,3 +1,4 @@
+import { applyCameraView } from "./camera-pose.js";
 import * as THREE from "three";
 import { Water } from "three/addons/objects/Water.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
@@ -421,27 +422,13 @@ export class PortfolioScene {
     if (this.underwater.group.visible)
       this.underwater.update(t, delta * motion, this.smoothPointer);
     const mobile = innerWidth < 650,
-      inGallery = this.page === "gallery",
-      parallax = mobile
-        ? 0
-        : (inGallery
-            ? Math.min(0.9, (this.view.z - this.view.tz) * 0.09)
-            : 6 - this.contactMix.value * 5.65) * motion;
-    this.camera.position.set(
-      this.view.x +
-        this.smoothPointer.x * parallax +
-        (inGallery ? 0 : this.dragOffset),
-      this.view.y - this.smoothPointer.y * parallax * 0.46,
-      this.view.z + (mobile && this.page === "work" ? 4 : 0),
-    );
-    this.camera.lookAt(
-      this.view.tx +
-        (inGallery ? 0 : this.dragOffset * 0.5) -
-        this.smoothPointer.x * parallax * 0.13,
-      this.view.ty + this.smoothPointer.y * parallax * 0.1,
-      this.view.tz,
-    );
-    this.camera.rotateZ(-this.smoothPointer.x * parallax * 0.004);
+      inGallery = this.page === "gallery";
+    applyCameraView(this.camera, this.view, this.page, this.smoothPointer, {
+      mobile,
+      reduced: this.reduced,
+      contact: this.contactMix.value,
+      drag: this.dragOffset,
+    });
     if (inGallery) {
       const near = THREE.MathUtils.clamp(
         (this.view.z - this.view.tz) * 0.015,
