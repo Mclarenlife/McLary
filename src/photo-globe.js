@@ -331,7 +331,8 @@ export class PhotoGlobe {
         new THREE.Matrix4().lookAt(camera.position, card.position, camera.up),
       );
       card.quaternion.copy(pose.quaternion).slerp(front, h);
-      const scale = card.userData.visibility * (1 + h * 0.85);
+      const scale =
+        card.userData.visibility * (1 + h * 0.85) * (this.flightReveal ?? 1);
       card.scale.setScalar(scale);
       card.visible = scale > 0.001;
     });

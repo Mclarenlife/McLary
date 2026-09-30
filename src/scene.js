@@ -453,13 +453,14 @@ export class PortfolioScene {
         this.camera.updateProjectionMatrix();
       }
     }
+    this.orbitalFlight?.applyCamera(this.camera);
     if (inGallery) {
       this.photoGallery.interactionEnabled =
         this.entered &&
         !this.dragging &&
         !document.body.classList.contains("menu-open") &&
         !document.querySelector("dialog[open]") &&
-        !this.singularityActive &&
+        !this.orbitalActive &&
         !this.waterMotion.push.pass.enabled;
       this.photoGallery.update(t, this.camera, motion, this.dragOffset, delta);
       this.renderer.domElement.style.cursor = this.photoGallery.hovered

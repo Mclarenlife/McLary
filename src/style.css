@@ -20,38 +20,11 @@ body {
   margin: 0;
   overflow-x: clip;
 }
-.singularity-stage,
-.singularity-world {
-  display: contents;
+.orbital-active {
+  overflow: hidden;
 }
-.singularity-canvas {
-  display: none;
-}
-.singularity-stage.is-active > .singularity-canvas {
-  display: block;
-  position: absolute;
-  inset: 0;
-  z-index: 200;
+.orbital-active body {
   pointer-events: none;
-}
-.singularity-active {
-  overflow: hidden;
-}
-.singularity-stage.is-active {
-  display: block;
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  overflow: hidden;
-  background: #020309;
-  touch-action: none;
-}
-.singularity-stage.is-active .singularity-world {
-  display: block;
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  isolation: isolate;
 }
 button,
 a {

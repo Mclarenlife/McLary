@@ -5,7 +5,7 @@ import { profile, projects } from "./content.js";
 import { GalleryMotion } from "./gallery-motion.js";
 import { places, photographs } from "./photography.js";
 import { arrowDown, arrowUp, asterisk, orbitIcon } from "./icons.js";
-import { SingularityTransition } from "./singularity-transition.js";
+import { OrbitalTransition } from "./orbital-transition.js";
 
 let scene;
 let sceneUnavailable = false;
@@ -20,7 +20,7 @@ let galleryParking;
 const projectCardPool = new Map();
 const galleryEntry = { value: 0 };
 let navigation;
-let singularity;
+let orbital;
 const app = document.querySelector("#app");
 const icon = `<span class="arrow" aria-hidden="true">${arrowDown}</span>`;
 const pages = {
@@ -151,8 +151,8 @@ function navigate(path) {
   const nextPage = pages[normalize(path)] || "404";
   if (nextPage === "gallery" || page() === "gallery") {
     scene?.cancelTransition();
-    if (scene) scene.singularityActive = true;
-    navigation = singularity.start(
+    if (scene) scene.orbitalActive = true;
+    navigation = orbital.start(
       () => {
         history.pushState({}, "", path);
         galleryEntry.value = 0;
@@ -161,12 +161,13 @@ function navigate(path) {
         scene?.render();
       },
       () => {
-        if (scene) scene.singularityActive = false;
+        if (scene) scene.orbitalActive = false;
       },
       () => {
         scene?.render();
         if (page() === "work") galleryMotion?.renderFrame(true);
       },
+      { scene, entering: nextPage === "gallery", destination: nextPage },
     );
     if (
       import.meta.env.DEV &&
@@ -505,7 +506,7 @@ function enter(withSound = false) {
   document.querySelector("footer").inert = false;
 }
 shell();
-singularity = new SingularityTransition();
+orbital = new OrbitalTransition();
 showPage();
 document.querySelector("main").inert = true;
 document.querySelector("header").inert = true;
@@ -556,6 +557,7 @@ async function start() {
       ?.prepare()
       .catch((error) => console.warn("Scene preparation unavailable", error)),
   ]);
+  if (scene) orbital.prepare(scene);
   experienceReady = true;
   updateGalleryProgress(1, "Your space is ready");
   intro.dataset.loading = "false";
@@ -607,8 +609,8 @@ addEventListener("scene-unavailable", () => {
 });
 addEventListener("popstate", () => {
   navigation?.kill();
-  singularity.cancel();
-  if (scene) scene.singularityActive = false;
+  orbital.cancel();
+  if (scene) scene.orbitalActive = false;
   scene?.cancelTransition();
   galleryEntry.value = 0;
   document.querySelector("main").style.pointerEvents = "";
@@ -617,11 +619,11 @@ addEventListener("popstate", () => {
 });
 // Resizing or changing the motion preference settles at the destination, rather
 // than leaving a viewport-sized lens or an inert interface behind.
-addEventListener("resize", () => singularity.complete());
+addEventListener("resize", () => orbital.complete());
 matchMedia("(prefers-reduced-motion: reduce)").addEventListener(
   "change",
   (event) => {
-    if (event.matches) singularity.complete();
+    if (event.matches) orbital.complete();
   },
 );
 addEventListener("keydown", (e) => {
