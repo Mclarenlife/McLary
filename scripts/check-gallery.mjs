@@ -146,10 +146,17 @@ for (const hz of [30, 144]) {
     "Orbit speed is independent of frame rate",
   );
 }
-assert(
-  photographs.every((p) => !p.image && p.empty),
-  "Keep user-requested empty frames",
-);
+for (const photo of photographs.filter((p) => p.image)) {
+  assert.equal(
+    new URL(photo.image).hostname,
+    "mclary-gallery.oss-cn-shenzhen.aliyuncs.com",
+  );
+  assert(places.some((place) => place.id === photo.place));
+  const preview = await fs.readFile(`public${photo.preview}`);
+  assert.equal(preview.toString("ascii", 8, 12), "WEBP");
+  assert(preview.length < 500_000, "Orbit textures must remain lightweight");
+  assert(!photo.empty);
+}
 assert.equal(globe.decor.planets.length, 3);
 assert(
   globe.decor.satellite.children.length > 0 &&

@@ -95,9 +95,15 @@ export class PhotoGlobe {
     const [world, data, ...photos] = await Promise.all([
       loadJSON("/earth/countries.json?v=coastal-detail-2"),
       loadJSON("/earth/regions.json"),
-      ...photographs.map((p) =>
-        p.image ? loader.loadAsync(p.image) : Promise.resolve(null),
-      ),
+      ...photographs.map((p) => {
+        const source = p.preview || p.image;
+        return source
+          ? loader.loadAsync(source).catch(() => {
+              console.warn(`Gallery preview unavailable: ${p.id}`);
+              return null;
+            })
+          : Promise.resolve(null);
+      }),
     ]);
     const map = countryTexture(
       world.countries,
