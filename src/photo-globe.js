@@ -286,6 +286,47 @@ export class PhotoGlobe {
       }),
     );
   }
+  recenterForDeparture() {
+    this.selectionTween?.kill();
+    this.departureActive = true;
+    this.focused = null;
+    this.clearPointer();
+    const from = this.earthGroup.quaternion.clone();
+    const to = globeOrientation(35, 105);
+    const uniforms = this.material.uniforms;
+    const angle = from.angleTo(to);
+    const needsReturn = angle > 0.0001 || this.zoom.value > 0.0001;
+    const duration = needsReturn
+      ? THREE.MathUtils.clamp(0.8 + angle * 0.55, 0.8, 1.5)
+      : 0;
+    const progress = { value: 0 };
+    const timeline = gsap.timeline().to(progress, {
+      value: 1,
+      duration,
+      ease: "power2.inOut",
+      onUpdate: () =>
+        this.earthGroup.quaternion.slerpQuaternions(from, to, progress.value),
+    });
+    timeline.to(
+      uniforms.magnification,
+      { value: 1, duration, ease: "power2.inOut" },
+      0,
+    );
+    timeline.to(
+      [uniforms.highlight, uniforms.detail, this.zoom],
+      { value: 0, duration, ease: "power2.inOut" },
+      0,
+    );
+    this.photoCards.forEach((card) => {
+      gsap.killTweensOf(card.userData, "visibility");
+      timeline.to(
+        card.userData,
+        { visibility: 1, duration, ease: "power2.inOut" },
+        0,
+      );
+    });
+    return timeline;
+  }
   setPointer(x, y) {
     this.pointer = { x, y };
   }
@@ -305,7 +346,11 @@ export class PhotoGlobe {
   update(time, camera, motion, dragOffset = 0, delta = 1 / 60) {
     this.decor.update(time, motion);
     if (!this.ready) return;
-    if (this.selected === "all" && !this.selectionTween?.isActive())
+    if (
+      this.selected === "all" &&
+      !this.selectionTween?.isActive() &&
+      !this.departureActive
+    )
       this.earthGroup.quaternion.copy(
         globeOrientation(35, 105 + dragOffset * 12),
       );

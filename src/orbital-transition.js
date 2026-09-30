@@ -111,19 +111,28 @@ export class OrbitalTransition {
       { type: THREE.HalfFloatType },
     );
     this.material.uniforms.frame.value = this.target.texture;
-    scene.setPage("gallery", true);
-    scene.photoGallery.select("all", true);
-    scene.orbitalFlight = this;
     scene.orbitalActive = true;
+    scene.dragging = false;
     this.state = { progress: entering ? 0 : 1 };
-    this.patch.visible = true;
     this.app.inert = true;
     document.documentElement.classList.add("orbital-active");
-    this.update();
-    this.timeline = gsap
-      .timeline({
-        onUpdate: () => this.update(),
-        onComplete: () => this.finish(),
+    this.flightStarted = false;
+    this.timeline = gsap.timeline({
+      onUpdate: () => {
+        if (this.flightStarted) this.update();
+      },
+      onComplete: () => this.finish(),
+    });
+    // Keep the normal gallery camera and current globe pose until alignment ends.
+    if (!entering) this.timeline.add(scene.photoGallery.recenterForDeparture());
+    this.timeline
+      .call(() => {
+        scene.setPage("gallery", true);
+        scene.photoGallery.select("all", true);
+        scene.photoGallery.departureActive = false;
+        scene.orbitalFlight = this;
+        this.flightStarted = true;
+        this.update();
       })
       .to(this.state, {
         progress: entering ? 1 : 0,
@@ -273,6 +282,7 @@ export class OrbitalTransition {
     if (this.scene) {
       this.scene.orbitalFlight = null;
       this.scene.orbitalActive = false;
+      this.scene.photoGallery.departureActive = false;
       this.scene.photoGallery.flightReveal = 1;
       this.scene.photoGallery.decor.group.visible = true;
     }
@@ -286,6 +296,7 @@ export class OrbitalTransition {
     this.swap = null;
     document.documentElement.classList.remove("orbital-active");
     this.onComplete = null;
+    this.flightStarted = false;
   }
   complete() {
     if (this.timeline) this.finish();

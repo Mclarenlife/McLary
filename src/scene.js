@@ -478,6 +478,14 @@ export class PortfolioScene {
         this.underwater.group.visible,
       );
       this.renderer.domElement.dataset.place = this.photoGallery.selected;
+      this.renderer.domElement.dataset.globeQuaternion =
+        this.photoGallery.earthGroup.quaternion
+          .toArray()
+          .map((v) => v.toFixed(5))
+          .join(",");
+      this.renderer.domElement.dataset.recentering = String(
+        !!this.photoGallery.departureActive,
+      );
       this.renderer.domElement.dataset.globeReady = String(
         this.photoGallery.ready,
       );
