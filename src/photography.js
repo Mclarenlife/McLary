@@ -25,14 +25,15 @@ export const photographs = [
     credit: "McLary",
     empty: false,
   })),
-  {
-    id: "macau-01",
+  ...["DSCF0127", "DSCF0129", "DSCF0135"].map((file, index) => ({
+    id: `macau-0${index + 1}`,
     place: "macau",
-    title: "澳门",
-    image: "",
-    credit: "",
-    empty: true,
-  },
+    title: `澳门 · ${file}`,
+    image: `${oss}/Macau/${file}.jpg`,
+    preview: `/photography/${file}.webp`,
+    credit: "McLary",
+    empty: false,
+  })),
   {
     id: "shanxi-01",
     place: "shanxi",
