@@ -1,64 +1,12 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { SeaVisitors } from "./sea-visitors.js";
+import { underwaterLight } from "./underwater-light.js";
 
 const backgroundVertex = /* glsl */ `
   varying vec2 vUv;
   void main() { vUv = uv; gl_Position = vec4(position.xy, 1., 1.); }
 `;
-const backgroundFragment = /* glsl */ `
-  uniform float time;
-  uniform float aspect;
-  uniform vec2 pointer;
-  varying vec2 vUv;
-  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-  float noise(vec2 p) {
-    vec2 i = floor(p), f = fract(p);
-    f = f * f * (3. - 2. * f);
-    return mix(mix(hash(i), hash(i + vec2(1., 0.)), f.x),
-      mix(hash(i + vec2(0., 1.)), hash(i + 1.), f.x), f.y);
-  }
-  void main() {
-    vec2 uv = vUv + pointer * .008;
-    float depth = 1. - uv.y;
-    float waveSlope = sin(uv.x * 17. + time * .78) * .012
-      + sin(uv.x * 31. - time * 1.07) * .006;
-    uv.x += waveSlope * (.3 + depth * 1.7);
-    vec3 color = mix(vec3(.004, .025, .058), vec3(.07, .32, .37), pow(uv.y, 1.45));
-    float water = noise(vec2(uv.x * 9. + time * .045, uv.y * 5. - time * .06));
-    color += vec3(.007, .027, .03) * water;
-
-    // Sunlight fans out from points above the surface. Broad shafts contain
-    // softer moving filaments, rather than fixed stripes painted on the sky.
-    float rays = 0.;
-    for (int i = 0; i < 9; i++) {
-      float n = float(i);
-      float surfaceWave = sin(time * .73 + n * 1.43) * .021 + sin(time * 1.11 - n * 2.3) * .009;
-      float source = .22 + .072 * n + surfaceWave;
-      float slope = (n - 4.) * .135 + cos(time * .62 + n * 1.43) * .075;
-      float center = source + (depth + .1) * slope + sin(depth * 11. - time * .9 + n) * depth * .014;
-      float width = (.012 + .025 * depth) * (1. + .32 * sin(time * .9 + n * 2.1));
-      float distance = (uv.x - center) * min(aspect, 1.7);
-      float shaft = exp(-pow(distance / width, 2.));
-      float filament = .65 + .35 * noise(vec2(uv.x * 65. + n, depth * 3. + time * .16));
-      rays += shaft * filament * (.65 + .35 * sin(time * .86 + n * 4. + depth * 7.));
-    }
-    rays *= exp(-depth * 2.5) * smoothstep(0., .12, depth);
-    color += vec3(.12, .27, .25) * rays;
-    float glow = exp(-pow((uv.x - .48) * aspect * 1.5, 2.) - depth * 8.);
-    color += vec3(.20, .35, .30) * glow;
-
-    // Shimmering underside of the surface stays near the top of the view.
-    vec2 surface = vec2(uv.x * 22., depth * 85.);
-    surface.x += sin(surface.y * .42 + time * .3) * .8;
-    float shimmer = pow(max(0., sin(surface.x + sin(surface.y - time * .22))
-      * sin(surface.y * .9 + sin(surface.x * .8 + time * .25))), 5.);
-    color += vec3(.09, .17, .15) * shimmer * exp(-depth * 18.);
-    color *= 1. - .22 * pow(abs(uv.x - .5) * 2., 2.);
-    gl_FragColor = vec4(color, 1.);
-  }
-`;
-
 function fishGeometry() {
   const body = new THREE.SphereGeometry(1, 12, 8);
   body.scale(0.83, 0.24, 0.12);
@@ -201,7 +149,7 @@ export class UnderwaterScene {
       new THREE.PlaneGeometry(2, 2),
       new THREE.ShaderMaterial({
         vertexShader: backgroundVertex,
-        fragmentShader: backgroundFragment,
+        fragmentShader: underwaterLight,
         uniforms: {
           time: this.time,
           aspect: { value: innerWidth / innerHeight },

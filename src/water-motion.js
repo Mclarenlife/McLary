@@ -17,10 +17,15 @@ const waves = /* glsl */ `
       direction * (cos(phase) * frequency * amplitude));
   }
   vec3 waterField(vec2 p) {
-    vec3 field = wave(p, vec2(.94, .34), 1.65, -.85, .046);
+    vec3 field = wave(p, vec2(.94, .34), .24, -.52, .15);
+    field += wave(p, vec2(.62, .78), .43, -.68, .075);
+    field += wave(p, vec2(-.38, .92), .79, .81, .033);
+    field += wave(p, vec2(.94, .34), 1.65, -.85, .046);
     field += wave(p, vec2(-.38, .92), 2.7, 1.12, .026);
     field += wave(p, vec2(.71, -.71), 4.8, -1.4, .012);
     field += wave(p, vec2(.23, .97), 8.6, 1.75, .006);
+    field += wave(p, vec2(.87, .49), 13.7, -2.2, .003);
+    field += wave(p, vec2(-.57, .82), 21.3, 2.7, .0016);
     for (int i = 0; i < ${RIPPLE_COUNT}; i++) {
       vec4 ripple = waterRipples[i];
       float age = waveTime - ripple.z;
@@ -72,7 +77,23 @@ export class WaterMotion {
       )
       .replace(
         "normalize( noise.xzy * vec3( 1.5, 1.0, 1.5 ) )",
-        "normalize(vec3(-waveData.y, 1.0, -waveData.z) + vec3(noise.x, 0.0, noise.y) * .10)",
+        "normalize(vec3(-waveData.y, 1.0, -waveData.z) + vec3(noise.x, 0.0, noise.y) * .19)",
+      )
+      .replace(
+        "sunLight( surfaceNormal, eyeDirection, 100.0, 2.0, 0.5, diffuseLight, specularLight );",
+        "sunLight( surfaceNormal, eyeDirection, 210.0, 3.8, 0.35, diffuseLight, specularLight );",
+      )
+      .replace(
+        "vec3 outgoingLight = albedo;",
+        /* glsl */ `
+        // Deep water absorbs red light; grazing angles retain the real sky reflection.
+        vec3 deepWater = mix(vec3(.008,.065,.085), waterColor*.48, .55);
+        albedo = mix(deepWater + albedo*.46, albedo, reflectance*.68+.16);
+        float ridge = smoothstep(.10,.27,waveData.x) * smoothstep(.08,.24,length(waveData.yz));
+        float lace = pow(max(0.,noise.x + noise.y + .38),3.);
+        float foam = clamp(ridge * lace,0.,.13);
+        vec3 outgoingLight = albedo + vec3(.44,.58,.56)*foam + specularLight*.12;
+      `,
       );
 
     this.composer = new EffectComposer(renderer);

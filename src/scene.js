@@ -111,19 +111,34 @@ export class PortfolioScene {
       ];
     });
     const waterSegments = innerWidth < 600 ? 96 : 192;
-    this.water = new Water(
-      new THREE.PlaneGeometry(600, 600, waterSegments, waterSegments),
-      {
-        textureWidth: innerWidth < 600 ? 512 : 1024,
-        textureHeight: innerWidth < 600 ? 512 : 1024,
-        waterNormals: normal,
-        sunDirection: new THREE.Vector3(-0.5, 0.8, 0.2).normalize(),
-        sunColor: 0xffefde,
-        waterColor: 0x5798a8,
-        distortionScale: 2.4,
-        fog: true,
-      },
+    const waterGeometry = new THREE.PlaneGeometry(
+      600,
+      600,
+      waterSegments,
+      waterSegments,
     );
+    // Spend vertices near the boat and camera rather than on the distant horizon.
+    const grid = waterGeometry.attributes.position;
+    for (let i = 0; i < grid.count; i++) {
+      for (const axis of [0, 1]) {
+        const v = grid.getComponent(i, axis) / 300;
+        grid.setComponent(
+          i,
+          axis,
+          Math.sign(v) * Math.pow(Math.abs(v), 1.65) * 300,
+        );
+      }
+    }
+    this.water = new Water(waterGeometry, {
+      textureWidth: innerWidth < 600 ? 512 : 1024,
+      textureHeight: innerWidth < 600 ? 512 : 1024,
+      waterNormals: normal,
+      sunDirection: new THREE.Vector3(-42, 29, -120).normalize(),
+      sunColor: 0xffefde,
+      waterColor: 0x5798a8,
+      distortionScale: 1.35,
+      fog: true,
+    });
     this.water.rotation.x = -Math.PI / 2;
     this.water.position.y = 0.07;
     this.water.material.uniforms.size.value = 32;
@@ -247,8 +262,11 @@ export class PortfolioScene {
   }
   async prepare() {
     await document.fonts.ready;
-    this.ocean.prepare(this.renderer);
-    await this.photoGallery.prepare(this.renderer);
+    await Promise.all([
+      this.ocean.prepare(this.renderer),
+      this.underwater.visitors.prepare(),
+      this.photoGallery.prepare(this.renderer),
+    ]);
     const visible = this.ocean.group.visible;
     const underwaterVisible = this.underwater.group.visible;
     const galleryVisible = this.photoGallery.group.visible;

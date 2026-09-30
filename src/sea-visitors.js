@@ -1,132 +1,86 @@
 import * as THREE from "three";
+import { loadMarineModel } from "./marine-models.js";
 
-function fin(points, material) {
-  const shape = new THREE.Shape(points.map((p) => new THREE.Vector2(...p)));
-  return new THREE.Mesh(new THREE.ShapeGeometry(shape), material);
-}
-function ellipsoid(parent, material, scale, position = [0, 0, 0]) {
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 12), material);
-  mesh.scale.set(...scale);
-  mesh.position.set(...position);
-  parent.add(mesh);
-  return mesh;
-}
-function visitor(kind) {
-  const group = new THREE.Group();
-  const material = new THREE.MeshStandardMaterial({
-    color: kind === "turtle" ? "#315454" : "#163b4a",
-    roughness: 0.76,
-    metalness: 0.05,
-    side: THREE.DoubleSide,
-    fog: false,
-  });
-  const pale = new THREE.MeshStandardMaterial({
-    color: "#4c7279",
-    roughness: 0.85,
-    fog: false,
-  });
-  const moving = [];
-  if (kind === "turtle") {
-    ellipsoid(group, material, [1.1, 0.4, 0.72]);
-    ellipsoid(group, pale, [0.31, 0.21, 0.25], [1.15, -0.02, 0]);
-    for (const side of [-1, 1]) {
-      const flipper = ellipsoid(
-        group,
-        material,
-        [0.62, 0.08, 0.19],
-        [0.38, -0.1, side * 0.83],
-      );
-      flipper.rotation.y = side * 0.72;
-      moving.push(flipper);
-      const rear = ellipsoid(
-        group,
-        material,
-        [0.38, 0.07, 0.14],
-        [-0.82, -0.12, side * 0.6],
-      );
-      rear.rotation.y = -side * 0.65;
+// The whole body bends continuously: lateral shark propulsion, vertical whale
+// propulsion, and the turtle's paired rowing flippers.
+const bend = (kind) => /* glsl */ `
+  uniform float swimTime;
+  vec3 swim(vec3 p) {
+    ${
+      kind === "turtle"
+        ? `
+      float fin = smoothstep(.55, 1.65, abs(p.z));
+      p.y += sin(swimTime * 1.65 - abs(p.z) * 1.15) * fin * .34;
+      p.x += cos(swimTime * 1.65 - abs(p.z)) * fin * .09;
+    `
+        : `
+      float tail = pow(1. - smoothstep(-3.4, 1.5, p.x), 2.);
+      p.${kind === "whale" ? "y" : "z"} += sin(swimTime * ${kind === "whale" ? "1.5" : "2.5"} + p.x * 1.35) * tail * .40;
+    `
     }
-    // The carapace has a domed rim and a restrained scute pattern.
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(1, 0.028, 6, 48), pale);
-    rim.rotation.x = Math.PI / 2;
-    rim.scale.set(1.05, 0.69, 1);
-    group.add(rim);
-  } else {
-    const whale = kind === "whale";
-    ellipsoid(group, material, whale ? [2.7, 0.83, 0.76] : [2.1, 0.46, 0.39]);
-    ellipsoid(group, pale, whale ? [1.95, 0.2, 0.58] : [1.5, 0.13, 0.3], [
-      0.28,
-      -(whale ? 0.62 : 0.3),
-      0,
-    ]);
-    const nose = ellipsoid(
-      group,
-      material,
-      whale ? [0.85, 0.72, 0.69] : [0.7, 0.24, 0.23],
-      [whale ? 2.05 : 1.9, 0.02, 0],
-    );
-    const tail = new THREE.Group();
-    tail.position.x = whale ? -2.4 : -1.8;
-    group.add(tail);
-    moving.push(tail);
-    const tailFin = fin(
-      [
-        [0, 0.16],
-        [-0.8, whale ? 1.1 : 1.15],
-        [-0.6, 0.1],
-        [-0.9, -0.7],
-        [0, -0.1],
-      ],
-      material,
-    );
-    if (whale) tailFin.rotation.x = Math.PI / 2;
-    tail.add(tailFin);
-    const dorsal = fin(
-      [
-        [0.25, 0],
-        [-0.48, whale ? 0.6 : 0.94],
-        [-0.82, 0],
-      ],
-      material,
-    );
-    dorsal.position.y = whale ? 0.59 : 0.35;
-    group.add(dorsal);
-    for (const side of [-1, 1]) {
-      const pectoral = fin(
-        [
-          [0.65, 0],
-          [-0.66, whale ? 1.45 : 1.05],
-          [-0.17, 0],
-        ],
-        material,
-      );
-      pectoral.rotation.x = (side * Math.PI) / 2;
-      pectoral.position.set(0.25, -0.2, side * 0.26);
-      group.add(pectoral);
-    }
-    ellipsoid(
-      group,
-      new THREE.MeshBasicMaterial({ color: "#092732" }),
-      [0.045, 0.045, 0.045],
-      [whale ? 2.2 : 2, 0.13, 0.36],
-    );
+    return p;
   }
-  group.userData = { kind, moving };
-  return group;
-}
+`;
 
 export class SeaVisitors {
   constructor() {
     this.group = new THREE.Group();
     this.time = 0;
-    this.creatures = ["whale", "shark", "turtle"].map((kind) => visitor(kind));
-    this.creatures.forEach((creature) => {
+    this.swimTime = { value: 0 };
+    this.creatures = ["whale", "shark", "turtle"].map((kind) => {
+      const creature = new THREE.Group();
+      creature.userData.kind = kind;
       creature.visible = false;
       this.group.add(creature);
+      return creature;
     });
+  }
+  async prepare() {
+    await Promise.all(
+      this.creatures.map(async (creature) => {
+        const kind = creature.userData.kind;
+        const model = await loadMarineModel(kind);
+        model.traverse((mesh) => {
+          if (!mesh.isMesh) return;
+          const material = mesh.material;
+          material.fog = false;
+          material.roughness = Math.max(0.4, material.roughness);
+          material.onBeforeCompile = (shader) => {
+            shader.uniforms.swimTime = this.swimTime;
+            shader.vertexShader = bend(kind) + shader.vertexShader;
+            shader.vertexShader = shader.vertexShader.replace(
+              "#include <begin_vertex>",
+              `vec3 transformed = swim(position);`,
+            );
+            shader.vertexShader = shader.vertexShader.replace(
+              "#include <beginnormal_vertex>",
+              `
+            vec3 base = swim(position);
+            vec3 dx = (swim(position+vec3(.005,0,0))-base)/.005;
+            vec3 dy = (swim(position+vec3(0,.005,0))-base)/.005;
+            vec3 dz = (swim(position+vec3(0,0,.005))-base)/.005;
+            vec3 objectNormal = normalize(mat3(cross(dy,dz),cross(dz,dx),cross(dx,dy))*normal);
+          `,
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+              "#include <opaque_fragment>",
+              `
+            float depthHaze = 1.-exp(-length(vViewPosition)*.024);
+            outgoingLight = mix(outgoingLight*.65, vec3(.016,.13,.17), depthHaze*.80);
+            #include <opaque_fragment>
+          `,
+            );
+          };
+          material.customProgramCacheKey = () => `marine-swim-${kind}-v1`;
+          mesh.frustumCulled = false;
+        });
+        creature.add(model);
+      }),
+    );
   }
   update(delta) {
     this.time += delta;
+    this.swimTime.value = this.time;
     const cycle = this.time % 86;
     this.creatures.forEach((creature, i) => {
       const start = [4, 32, 57][i],
@@ -141,16 +95,11 @@ export class SeaVisitors {
         [-29, -17, -13][i],
       );
       creature.rotation.set(
-        i === 2 ? 0.35 : 0.02,
-        direction === 1 ? -0.16 : Math.PI + 0.16,
-        Math.cos(progress * Math.PI * 2) * 0.05,
+        i === 2 ? 0.42 : 0.04,
+        direction === 1 ? -0.22 : Math.PI + 0.22,
+        Math.cos(progress * Math.PI * 2) * 0.04,
       );
       creature.scale.setScalar([1.45, 1.05, 1.15][i]);
-      creature.userData.moving.forEach((part, j) => {
-        if (i === 0) part.rotation.y = Math.sin(this.time * 1.1) * 0.16;
-        else if (i === 1) part.rotation.y = Math.sin(this.time * 1.7) * 0.24;
-        else part.rotation.x = Math.sin(this.time * 1.5 + j * Math.PI) * 0.4;
-      });
     });
   }
 }

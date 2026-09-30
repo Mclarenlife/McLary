@@ -15,59 +15,7 @@ export class OceanAtmosphere {
   constructor() {
     this.group = new THREE.Group();
     this.time = { value: 0 };
-    this.clouds = [];
-    [
-      [-65, 28, -135, 52, 18],
-      [-8, 40, -165, 57, 24],
-      [65, 31, -155, 62, 20],
-      [-94, 52, -190, 48, 23],
-      [35, 57, -210, 72, 25],
-      [11, 15, -180, 34, 10],
-    ].forEach(([x, y, z, w, h], i) => {
-      const cloud = new THREE.Mesh(
-        new THREE.PlaneGeometry(w, h),
-        new THREE.ShaderMaterial({
-          transparent: true,
-          depthWrite: false,
-          uniforms: { time: this.time, seed: { value: i * 7.31 + 1.7 } },
-          vertexShader: vertex,
-          fragmentShader: /* glsl */ `
-          uniform float time; uniform float seed; varying vec2 vUv;
-          ${noise}
-          float density(vec3 p) {
-            float shape=-10.;
-            for(int i=0;i<5;i++) {
-              float n=float(i), r=hash(vec3(n,seed,1.));
-              vec3 c=vec3(-.58+n*.29,-.18+r*.27,(r-.5)*.35);
-              vec3 q=(p-c)/vec3(.28+r*.10,.27+r*.31,.5+r*.18);
-              shape=max(shape,1.-length(q));
-            }
-            float detail=fbm(p*5.+vec3(seed,time*.013,0.));
-            return smoothstep(-.12,.19,shape+(detail-.5)*.22);
-          }
-          void main() {
-            vec3 p=vec3((vUv-.5)*2.,-1.); vec3 light=normalize(vec3(-.6,.8,-.4));
-            vec3 color=vec3(0.); float alpha=0.;
-            for(int i=0;i<12;i++) {
-              p.z=-1.+float(i)*.17;
-              float d=density(p);
-              float illumination=clamp(.62+(d-density(p+light*.22))*1.5,0.,1.);
-              vec3 lit=mix(vec3(.56,.70,.78),vec3(1.7,1.65,1.47),illumination);
-              float a=d*.28;
-              color+=(1.-alpha)*a*lit; alpha+=(1.-alpha)*a;
-            }
-            if(alpha<.008) discard;
-            gl_FragColor=vec4(color/max(alpha,.001),alpha*.94);
-          }
-        `,
-        }),
-      );
-      cloud.position.set(x, y, z);
-      cloud.userData.baseX = x;
-      cloud.userData.phase = i;
-      this.clouds.push(cloud);
-      this.group.add(cloud);
-    });
+    // Detailed cloud formations come from the licensed panoramic sky dome.
     const fog = new THREE.Mesh(
       new THREE.PlaneGeometry(200, 150),
       new THREE.ShaderMaterial({
@@ -148,10 +96,6 @@ export class OceanAtmosphere {
   }
   update(time, motion) {
     this.time.value = time;
-    this.clouds.forEach((cloud, i) => {
-      cloud.position.x =
-        cloud.userData.baseX + Math.sin(time * 0.016 + i * 1.7) * 5 * motion;
-    });
     this.gulls.forEach((bird, i) => {
       const t = time * 0.075 + i * 0.62;
       bird.position.set(

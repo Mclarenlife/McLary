@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { OceanAtmosphere } from "./ocean-atmosphere.js";
+import { loadMarineModel } from "./marine-models.js";
 
 export const BOAT_SCALE = 0.68;
 export const boatPosition = (mobile) => ({ x: mobile ? 2.1 : 6.1, z: -4 });
@@ -49,12 +50,31 @@ export class OceanScene {
         uniforms: {
           top: { value: new THREE.Color("#80bfdc") },
           horizon: { value: new THREE.Color("#f6eada") },
+          skyMap: { value: null },
+          skyReady: { value: 0 },
+          skyTime: { value: 0 },
         },
         vertexShader: `varying vec3 direction; void main(){ direction=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
-        fragmentShader: `uniform vec3 top; uniform vec3 horizon; varying vec3 direction; void main(){ float y=normalize(direction).y; vec3 color=mix(horizon,top,smoothstep(-.02,.48,y)); gl_FragColor=vec4(color,1.); }`,
+        fragmentShader: `
+          uniform vec3 top; uniform vec3 horizon; uniform sampler2D skyMap;
+          uniform float skyReady; uniform float skyTime; varying vec3 direction;
+          void main(){
+            vec3 d=normalize(direction); float y=d.y;
+            vec2 uv=vec2(fract(.5+atan(d.z,d.x)/6.2831853+.403+skyTime*.00006),clamp(.5+asin(clamp(y,-1.,1.))*2.7/3.1415927,.01,.99));
+            uv.x+=sin(uv.y*18.+skyTime*.025)*.0007;
+            vec3 captured=texture2D(skyMap,uv).rgb;
+            captured=mix(vec3(dot(captured,vec3(.2126,.7152,.0722))),captured,.72)*1.6;
+            vec3 base=mix(horizon,top,smoothstep(-.02,.48,y));
+            vec3 color=mix(base,captured,skyReady*smoothstep(-.01,.075,y)*.90);
+            float sunDot=dot(d,normalize(vec3(-.33,.22,-.92)));
+            float disc=smoothstep(.99960,.99986,sunDot);
+            color+=vec3(2.8,2.25,1.55)*disc+vec3(.22,.17,.09)*exp(-(1.-sunDot)*190.);
+            gl_FragColor=vec4(color,1.);
+          }`,
       }),
     );
     this.group.add(sky);
+    this.sky = sky;
     const sun = new THREE.Mesh(
       new THREE.SphereGeometry(4.6, 40, 24),
       new THREE.MeshBasicMaterial({
@@ -125,7 +145,9 @@ export class OceanScene {
     );
     hull.position.z = -0.425;
     hull.castShadow = hull.receiveShadow = true;
-    this.boat.add(hull);
+    this.hullPlaceholder = new THREE.Group();
+    this.boat.add(this.hullPlaceholder);
+    this.hullPlaceholder.add(hull);
     const timber = new THREE.MeshStandardMaterial({
       color: "#b58d65",
       roughness: 0.74,
@@ -135,7 +157,7 @@ export class OceanScene {
       timber,
     );
     deck.position.y = 0.43;
-    this.boat.add(deck);
+    this.hullPlaceholder.add(deck);
     const mast = new THREE.Mesh(
       new THREE.CylinderGeometry(0.028, 0.045, 4.5, 12),
       timber,
@@ -225,7 +247,20 @@ export class OceanScene {
     this.halo.position.copy(this.sun.position);
   }
 
-  prepare(renderer) {
+  async prepare(renderer) {
+    const [hull, skyMap] = await Promise.all([
+      loadMarineModel("boat-hull"),
+      new THREE.TextureLoader().loadAsync("/textures/ocean-sky.webp"),
+    ]);
+    skyMap.colorSpace = THREE.SRGBColorSpace;
+    skyMap.wrapS = THREE.RepeatWrapping;
+    renderer.initTexture(skyMap);
+    this.sky.material.uniforms.skyMap.value = skyMap;
+    this.sky.material.uniforms.skyReady.value = 1;
+    this.sun.visible = this.halo.visible = false;
+    this.boat.remove(this.hullPlaceholder);
+    this.hullPlaceholder.traverse((part) => part.geometry?.dispose());
+    this.boat.add(hull);
     const ctx = this.clothCanvas.getContext("2d");
     ctx.fillStyle = "#fffdf7";
     ctx.fillRect(0, 0, 1536, 1536);
@@ -238,6 +273,9 @@ export class OceanScene {
       ctx.stroke();
     }
     ctx.strokeRect(14, 14, 1508, 1508);
+    ctx.fillStyle = "rgba(104,89,64,.045)";
+    for (let y = 0; y < 1536; y += 4) ctx.fillRect(0, y, 1536, 1);
+    for (let x = 0; x < 1536; x += 4) ctx.fillRect(x, 0, 1, 1536);
     ctx.fillStyle = "#7c8179";
     ctx.font = 'italic 330px "Cormorant Garamond"';
     ctx.textAlign = "center";
@@ -257,6 +295,7 @@ export class OceanScene {
   }
 
   update(time, motion) {
+    this.sky.material.uniforms.skyTime.value = time * motion;
     this.boat.position.y = 0.16 + Math.sin(time * 0.7) * 0.035 * motion;
     this.boat.rotation.set(
       Math.sin(time * 0.55) * 0.012 * motion,
