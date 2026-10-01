@@ -46,20 +46,46 @@ export const waterVeilGLSL = /* glsl */ `
   uniform float waterCover;
   uniform float waterStrength;
   uniform float waterTime;
-  // uv has its origin at the bottom: decreasing cover clears top to bottom.
-  vec3 waterLens(vec2 uv, float aspect) {
-    float t = waterTime * .34;
-    vec2 p = vec2(uv.x * aspect, uv.y);
-    float a = sin(p.x * 5.4 + p.y * 3.1 - t);
-    float b = sin(p.x * -3.7 + p.y * 7.8 + t * .73 + a * .7);
-    float c = sin(p.x * 8.3 - p.y * 4.2 - t * .61 + b * .5);
-    float wave = a * .5 + b * .32 + c * .18;
+  // A curved meniscus bends rays most near the boundary. The signed light term
+  // gives a lit upper lip and a darker opposing lip, never a flat outlined ring.
+  vec4 waterDrop(vec2 uv, vec2 center, vec2 radius, float phase, float depth, float aspect) {
+    vec2 q = (uv - center) * vec2(aspect, 1.) / radius;
+    q.x += sin(q.y * 2.7 + phase) * .11;
+    q.y += sin(q.x * 3.1 - phase * .8) * .07;
+    float d = length(q);
+    vec2 normal = q / max(d, .001);
+    float inside = 1. - smoothstep(.965, 1.025, d);
+    float shoulder = smoothstep(.35, .94, d) * inside;
+    float lip = exp(-pow((d - .965) / .037, 2.));
+    float incidence = dot(normal, normalize(vec2(-.6, .8)));
+    float light = lip * (max(incidence, 0.) * .85 - max(-incidence, 0.) * .45);
+    vec2 bend = -normal * shoulder * depth;
+    return vec4(bend, light, shoulder);
+  }
+  // Pixels outside the drops remain sharp. Broad pools and small droplets share
+  // one screen-space field across the background and the paper renderer.
+  vec4 waterLens(vec2 uv, float aspect) {
+    float t = waterTime * .16;
+    vec4 glass = vec4(0.);
+    float shape = min(aspect, 1.45);
+    glass += waterDrop(uv, vec2(.12 + sin(t*.43)*.025, .64 + sin(t*.6)*.035),
+      vec2(.24*shape, .30), t, 24., aspect);
+    glass += waterDrop(uv, vec2(.79 + sin(t*.51+2.)*.02, .34 + sin(t*.38)*.04),
+      vec2(.23*shape, .24), t*.83+3., 21., aspect);
+    glass += waterDrop(uv, vec2(.66, 1.02 + sin(t*.4)*.03),
+      vec2(.28*shape, .19), t*.7+5., 19., aspect);
+    for (int i = 0; i < 7; i++) {
+      float f = float(i);
+      vec2 center = vec2(fract(f*.381966+.28), fract(f*.618034+.19));
+      center += vec2(sin(t*.7+f)*.007, sin(t*.4+f*1.7)*.016);
+      float radius = .018 + fract(f*.437)*.025;
+      glass += waterDrop(uv, center, vec2(radius, radius*1.17), t*.3+f, 8.+radius*90., aspect);
+    }
     float boundary = mix(-.12, 1.12, waterCover);
     float covered = 1. - smoothstep(boundary - .085, boundary + .085,
-      uv.y + wave * .022);
-    float focus = .5 + .5 * sin(p.x * 4.1 + p.y * 5.7 + t * .9 + wave);
-    vec2 displacement = vec2(b * .7 + c * .3, a * .55 - c * .45);
-    return vec3(displacement * (2.1 + focus * 2.8), .85 + focus * 1.8)
-      * covered * waterStrength;
+      uv.y + sin(uv.x*9.+t)*.016);
+    glass.xy *= min(waterStrength, 1.55);
+    glass.zw = clamp(glass.zw, vec2(-.5, 0.), vec2(1., 1.));
+    return glass * covered;
   }
 `;

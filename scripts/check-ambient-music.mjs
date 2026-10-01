@@ -91,10 +91,14 @@ globalThis.AudioContext = class {
     return Object.assign(new Node(), {
       frequency: new Param(),
       Q: new Param(),
+      gain: new Param(),
     });
   }
   createConvolver() {
     return new Node();
+  }
+  createOscillator() {
+    return Object.assign(new Node(), { frequency: new Param(), start() {} });
   }
   createBuffer(n, length) {
     const data = Array.from({ length: n }, () => new Float32Array(length));
@@ -114,6 +118,8 @@ globalThis.AudioContext = class {
   }
   createBufferSource() {
     return Object.assign(new Node(), {
+      playbackRate: new Param(),
+      detune: new Param(),
       start() {
         starts++;
       },
@@ -145,9 +151,16 @@ assert.equal(
 );
 assert(player.sources.sea.loop && player.sources.space.loop);
 assert(
-  Math.abs(player.filter.frequency.target - 380) < 1e-8,
+  Math.abs(player.filter.frequency.target - 300) < 1e-8,
   "A route change while loading is preserved",
 );
+assert(
+  Math.abs(player.sources.sea.playbackRate.value - 2 ** (-5 / 12)) < 1e-8,
+  "Direct underwater playback starts five semitones lower",
+);
+assert(player.pitchDrift.connections.includes(player.sources.sea.detune));
+assert.equal(player.pitchDrift.gain.target, 14);
+assert.equal(player.body.gain.target, 4.5);
 assert.equal(
   player.master.gain.target,
   0.2,
@@ -175,6 +188,17 @@ assert(
   "Filtered music feeds real convolution reverb",
 );
 player.transitionWater("work", "contact");
+assert.equal(
+  player.sources.sea.playbackRate.target,
+  1,
+  "Emerging restores original pitch",
+);
+assert.equal(
+  player.pitchDrift.gain.target,
+  0,
+  "Surface music has no underwater pitch drift",
+);
+assert.equal(player.body.gain.target, 0);
 assert.equal(starts, 3);
 assert.equal(player.filter.frequency.target, 2600);
 assert.equal(player.wet.gain.target, 0);

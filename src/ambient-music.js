@@ -43,6 +43,12 @@ export class AmbientMusic {
     this.filter = ctx.createBiquadFilter();
     this.filter.type = "lowpass";
     this.filter.Q.value = 0.55;
+    this.body = ctx.createBiquadFilter();
+    this.body.type = "lowshelf";
+    this.body.frequency.value = 220;
+    this.body.connect(this.filter);
+    this.pitchDrift = ctx.createGain();
+    this.pitchDrift.gain.value = 0;
     this.dry = ctx.createGain();
     this.wet = ctx.createGain();
     this.reverb = ctx.createConvolver();
@@ -95,11 +101,16 @@ export class AmbientMusic {
     else param.setValueAtTime(value, now);
   }
   mix(space, submerged, duration) {
+    this.seaRate = 2 ** ((-5 * submerged) / 12);
+    if (this.sources?.sea)
+      this.ramp(this.sources.sea.playbackRate, this.seaRate, duration);
+    this.ramp(this.body.gain, submerged * 4.5, duration);
+    this.ramp(this.pitchDrift.gain, submerged * 14, duration);
     this.ramp(this.seaGain.gain, Math.cos((space * Math.PI) / 2), duration);
     this.ramp(this.spaceGain.gain, Math.sin((space * Math.PI) / 2), duration);
     this.ramp(
       this.filter.frequency,
-      2600 * (380 / 2600) ** submerged,
+      2600 * (300 / 2600) ** submerged,
       duration,
     );
     this.ramp(this.dry.gain, 1 - submerged * 0.58, duration);
@@ -214,16 +225,26 @@ export class AmbientMusic {
       this.sources = {};
       const start = this.context.currentTime;
       for (const [id, target] of [
-        ["sea", this.filter],
+        ["sea", this.body],
         ["space", this.spaceFilter],
       ]) {
         const source = this.context.createBufferSource();
         source.buffer = this.buffers[id];
         source.loop = true;
+        if (id === "sea") {
+          source.playbackRate.value = this.seaRate;
+          this.pitchDrift.connect(source.detune);
+        }
         source.connect(target);
         source.start(start);
         this.sources[id] = source;
       }
+      // A slow, very small pitch drift adds a submerged wavering quality.
+      this.driftOscillator = this.context.createOscillator();
+      this.driftOscillator.type = "sine";
+      this.driftOscillator.frequency.value = 0.16;
+      this.driftOscillator.connect(this.pitchDrift);
+      this.driftOscillator.start(start);
     }
     // Previously .36: roughly 5 dB quieter before scene processing.
     this.ramp(this.master.gain, 0.2, 1.2);

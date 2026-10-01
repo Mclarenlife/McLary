@@ -175,14 +175,14 @@ export class WaterMotion {
         varying vec2 vUv;
         ${waterVeilGLSL}
         void main() {
-          vec3 lens = waterLens(vUv, resolution.x / resolution.y);
+          vec4 lens = waterLens(vUv, resolution.x / resolution.y);
           vec2 uv = clamp(vUv + lens.xy / resolution, .001, .999);
-          vec2 blur = vec2(lens.z) / resolution;
-          vec4 color = texture2D(tDiffuse, uv) * .28;
-          color += texture2D(tDiffuse, clamp(uv + vec2(blur.x, blur.y), .001, .999)) * .18;
-          color += texture2D(tDiffuse, clamp(uv - vec2(blur.x, blur.y), .001, .999)) * .18;
-          color += texture2D(tDiffuse, clamp(uv + vec2(-blur.x, blur.y), .001, .999)) * .18;
-          color += texture2D(tDiffuse, clamp(uv + vec2(blur.x, -blur.y), .001, .999)) * .18;
+          vec2 split = lens.xy / resolution * .024 * lens.w;
+          vec4 color = texture2D(tDiffuse, uv);
+          color.r = texture2D(tDiffuse, clamp(uv + split, .001, .999)).r;
+          color.b = texture2D(tDiffuse, clamp(uv - split, .001, .999)).b;
+          color.rgb *= 1. + lens.z * .23;
+          color.rgb += max(lens.z, 0.) * vec3(.035, .042, .045);
           gl_FragColor = color;
         }
       `,

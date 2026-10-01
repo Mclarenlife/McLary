@@ -92,17 +92,19 @@ const fragmentShader = /* glsl */ `
     vec2 blur = (dx * (optical.x + .28) + dy * (optical.y + .45))
       * edge * (2.1 + dispersion) * breathing * viewport.y * mix(.22, 1., photo);
     vec2 screenUv = gl_FragCoord.xy / (viewport.x * viewport.y * vec2(waterAspect, 1.));
-    vec3 lens = waterLens(screenUv, waterAspect);
-    // Photos share the background's moving water focus; captions stay readable.
-    float legibility = mix(.12, .72, photo);
+    vec4 lens = waterLens(screenUv, waterAspect);
+    // Curved water edges displace and disperse the photo underneath, not a blur.
+    float legibility = mix(.22, 1., photo);
     uv += (dx * lens.x + dy * lens.y) * viewport.y * legibility;
-    blur += (dx * .72 + dy * .69) * lens.z * viewport.y * legibility;
+    split += (dx * lens.x + dy * lens.y) * viewport.y * .024 * lens.w * legibility;
     // One continuous sampling path: blur smoothly reaches zero in the center.
     // A threshold here used to outline the optical field as a moving rectangle.
     vec4 soft = softened(uv, blur, dx, dy);
     vec4 red = softened(uv + split, blur * .85, dx, dy);
     vec4 blue = softened(uv - split, blur * .85, dx, dy);
     vec4 color = vec4(mix(soft.rgb, vec3(red.r, soft.g, blue.b), min(red.a, blue.a)), soft.a);
+    color.rgb *= 1. + lens.z * .23 * legibility;
+    color.rgb += max(lens.z, 0.) * vec3(.035, .042, .045) * legibility;
     color.rgb *= .85 + .15 * abs(normal.z);
     // A broad, softly refracted highlight travels diagonally across the photos.
     vec2 cardUv = vec2(columnX / cardWidth, rowY / imageHeight);
