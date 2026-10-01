@@ -46,9 +46,10 @@ function brand() {
 }
 function shell() {
   app.innerHTML = `<header>${brand()}<nav class="nav" aria-label="Main"><a href="/">Index</a><a href="/work/">Work</a><a href="/contact/">Contact</a><button class="menu-toggle" aria-label="Open menu" aria-expanded="false"><span class="menu-dots"><i></i><i></i></span></button></nav></header><div class="menu" inert><nav aria-label="Explore"><a href="/"><small>01</small>Index</a><a href="/work/"><small>02</small>Work</a><a href="/contact/"><small>03</small>Contact</a><a href="/gallery/"><small>04</small>Gallery</a></nav><div class="menu-meta">${profile.name}<br>${profile.title}<p>${profile.introduction}</p></div></div><main class="page" id="content"></main><footer class="bottom"><div class="bottom-left"><button class="sound" aria-label="Enable ambient sound" aria-pressed="false"><i></i><i></i><i></i><i></i><i></i></button><span class="edition">PORTFOLIO — 2026</span></div><a href="/gallery/" class="play-link"><span>Enter</span><span class="globe" aria-hidden="true">${orbitIcon}</span><span>Gallery</span></a><div class="bottom-right"><span class="copyright">© ${new Date().getFullYear()} McLary</span>${timeControlMarkup}</div></footer><dialog class="dialog" aria-labelledby="detail-title"></dialog>`;
-  document
-    .querySelector(".menu-toggle")
-    .addEventListener("click", () => toggleMenu());
+  document.querySelector(".menu-toggle").addEventListener("click", () => {
+    audio?.playUI(menuOpen ? "close" : "open");
+    toggleMenu();
+  });
   document
     .querySelector(".sound")
     .addEventListener("click", () => toggleSound());
@@ -508,7 +509,10 @@ function enter(withSound = false) {
   document.querySelector("footer").inert = false;
 }
 shell();
-timeControl = bindTimeControl((mode) => scene?.setTimeMode(mode));
+timeControl = bindTimeControl(
+  (mode) => scene?.setTimeMode(mode),
+  (action) => audio?.playUI(action),
+);
 orbital = new OrbitalTransition();
 orbital.onProgress = (progress, surfacePage) =>
   audio?.setFlight(progress, surfacePage);

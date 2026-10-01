@@ -161,7 +161,7 @@ assert(
 );
 player.transitionWater("work", "contact");
 assert.equal(starts, 3);
-assert.equal(player.filter.frequency.target, 11000);
+assert.equal(player.filter.frequency.target, 2600);
 assert.equal(player.wet.gain.target, 0);
 assert.equal([...player.effects][0].source.buffer, player.buffers.emerge);
 player.transitionWater("contact", "work");
@@ -184,13 +184,37 @@ player.setFlight(1, "work");
 assert.equal(player.spaceGain.gain.target, 1);
 player.setFlight(0, "contact");
 assert.equal(player.spaceGain.gain.target, 0);
-assert.equal(player.filter.frequency.target, 11000);
+assert.equal(player.filter.frequency.target, 2600);
+assert.equal(player.spaceFilter.frequency.value, 1800);
+assert(player.sources.space.connections.includes(player.spaceFilter));
+const waterCue = [...player.effects][0];
+player.playUI("open");
+assert.equal(
+  player.effects.size,
+  2,
+  "UI feedback does not cut off water Foley",
+);
+assert(!waterCue.source.stopped);
+const uiStart = starts;
+player.playUI("close");
+assert.equal(starts, uiStart, "Rapid repeated clicks do not pile up sounds");
+player.context.currentTime += 0.3;
+player.playUI("close");
+assert.equal(player.effects.size, 2, "Replace only the previous UI cue");
+assert(!waterCue.source.stopped);
+for (const buffer of Object.values(player.uiBuffers)) {
+  const samples = buffer.getChannelData(0);
+  assert(Math.abs(samples[0]) < 1e-6 && Math.abs(samples.at(-1)) < 1e-6);
+  assert(Math.max(...samples) < 0.3, "Feedback remains subtle");
+}
 player.setScene("gallery", 0);
 assert.equal(player.spaceGain.gain.target, 1);
 const beforeMute = starts;
 await player.setEnabled(false);
 assert.equal(player.effects.size, 0);
 player.transitionWater("index", "work");
+player.context.currentTime += 0.3;
+player.playUI("select");
 assert.equal(starts, beforeMute, "Mute covers transition effects");
 await player.setEnabled(true);
 assert.equal(

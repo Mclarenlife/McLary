@@ -38,14 +38,14 @@ function tone(pitch, start, duration, level, pan, bell = false) {
     const t = i / rate,
       u = t / duration;
     const envelope = bell
-      ? (1 - Math.exp(-t / 0.3)) * Math.exp(-t / 3.4) * (1 - u) ** 2
+      ? (1 - Math.exp(-t / 0.8)) * Math.exp(-t / 4.2) * (1 - u) ** 2
       : Math.sin(Math.PI * u) ** 2;
     const phase = 2 * Math.PI * hz * t;
     const sample =
       level *
       envelope *
       (Math.sin(phase + 0.12 * Math.sin(t * 0.7)) +
-        0.12 * Math.sin(phase * (bell ? 2.003 : 2)));
+        0.035 * Math.sin(phase * (bell ? 2.003 : 2)));
     const index = (Math.round(start * rate) + i) % space[0].length;
     space[0][index] += sample * Math.sqrt((1 - pan) / 2);
     space[1][index] += sample * Math.sqrt((1 + pan) / 2);
@@ -62,7 +62,7 @@ function tone(pitch, start, duration, level, pan, bell = false) {
   chord.forEach((pitch, j) =>
     tone(pitch, i * 12 + j * 0.7, 20, 0.05, (j - 1) * 0.4),
   );
-  tone(chord[2] + 12, i * 12 + 5, 12, 0.09, Math.sin(i * 2) * 0.45, true);
+  tone(chord[2], i * 12 + 5, 12, 0.055, Math.sin(i * 2) * 0.45, true);
 });
 write("distant-orbit", space, 0.42);
 for (const entering of [true, false]) {

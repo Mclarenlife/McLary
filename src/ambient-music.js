@@ -1,6 +1,6 @@
 const assets = {
-  sea: "/audio/tidal-notes.wav?v=2",
-  space: "/audio/distant-orbit.wav?v=1",
+  sea: "/audio/tidal-notes.wav?v=3",
+  space: "/audio/distant-orbit.wav?v=2",
   dive: "/audio/water-entry.wav?v=1",
   emerge: "/audio/water-emerge.wav?v=1",
 };
@@ -35,6 +35,11 @@ export class AmbientMusic {
     this.seaGain.connect(this.master);
     this.spaceGain = ctx.createGain();
     this.spaceGain.connect(this.master);
+    this.spaceFilter = ctx.createBiquadFilter();
+    this.spaceFilter.type = "lowpass";
+    this.spaceFilter.frequency.value = 1800;
+    this.spaceFilter.Q.value = 0.5;
+    this.spaceFilter.connect(this.spaceGain);
     this.filter = ctx.createBiquadFilter();
     this.filter.type = "lowpass";
     this.filter.Q.value = 0.55;
@@ -84,7 +89,7 @@ export class AmbientMusic {
     this.ramp(this.spaceGain.gain, Math.sin((space * Math.PI) / 2), duration);
     this.ramp(
       this.filter.frequency,
-      11000 * (700 / 11000) ** submerged,
+      2600 * (700 / 2600) ** submerged,
       duration,
     );
     this.ramp(this.dry.gain, 1 - submerged * 0.15, duration);
@@ -105,24 +110,59 @@ export class AmbientMusic {
     else if (from === "work" && ["index", "contact"].includes(to))
       this.playEffect("emerge");
   }
-  stopEffects() {
-    for (const { source, gain } of this.effects) {
+  stopEffects(kind) {
+    for (const effect of this.effects) {
+      if (kind && effect.kind !== kind) continue;
+      const { source, gain } = effect;
       this.ramp(gain.gain, 0, 0.06);
       source.stop(this.context.currentTime + 0.12);
+      this.effects.delete(effect);
     }
-    this.effects.clear();
   }
   playEffect(id) {
     if (!this.enabled || !this.buffers || this.context.state !== "running")
       return;
-    this.stopEffects();
+    this.playBuffer(this.buffers[id], 0.65, "water");
+  }
+  playUI(action = "open") {
+    if (!this.enabled || this.context.state !== "running") return;
+    const now = this.context.currentTime;
+    if (now - (this.lastUI ?? -1) < 0.08) return;
+    this.lastUI = now;
+    this.uiBuffers ??= {};
+    if (!this.uiBuffers[action]) {
+      const rate = this.context.sampleRate;
+      const buffer = this.context.createBuffer(
+        1,
+        Math.round(rate * 0.22),
+        rate,
+      );
+      const samples = buffer.getChannelData(0);
+      const frequency = { open: 280, close: 220, select: 330 }[action] ?? 280;
+      for (let i = 0; i < samples.length; i++) {
+        const t = i / rate,
+          u = i / (samples.length - 1);
+        const phase = 2 * Math.PI * frequency * (t - 0.3 * t * t);
+        // A rounded wooden/water drop, without a sharp click or bright bell.
+        samples[i] =
+          (Math.sin(phase) + 0.08 * Math.sin(phase * 2)) *
+          Math.sin(Math.PI * u) ** 2 *
+          Math.exp(-t * 18) *
+          0.65;
+      }
+      this.uiBuffers[action] = buffer;
+    }
+    this.playBuffer(this.uiBuffers[action], 0.38, "ui");
+  }
+  playBuffer(buffer, level, kind) {
+    this.stopEffects(kind);
     const source = this.context.createBufferSource(),
       gain = this.context.createGain();
-    source.buffer = this.buffers[id];
-    gain.gain.value = 0.65;
+    source.buffer = buffer;
+    gain.gain.value = level;
     source.connect(gain);
     gain.connect(this.master);
-    const effect = { source, gain };
+    const effect = { source, gain, kind };
     this.effects.add(effect);
     source.onended = () => {
       source.disconnect();
@@ -165,7 +205,7 @@ export class AmbientMusic {
       const start = this.context.currentTime;
       for (const [id, target] of [
         ["sea", this.filter],
-        ["space", this.spaceGain],
+        ["space", this.spaceFilter],
       ]) {
         const source = this.context.createBufferSource();
         source.buffer = this.buffers[id];

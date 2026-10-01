@@ -43,13 +43,13 @@ function note(midi, when, volume, pan, decay) {
   for (let i = 0; i < rate * duration; i++) {
     const t = i / rate,
       phase = 2 * Math.PI * frequency * t;
-    const attack = 1 - Math.exp(-t / 0.075);
+    const attack = 1 - Math.exp(-t / 0.24);
     const envelope =
       attack * Math.exp(-t / decay) * Math.max(0, 1 - (t / duration) ** 4);
     const tone =
       Math.sin(phase) +
-      0.1 * Math.sin(phase * 2) * Math.exp(-t / 0.7) +
-      0.025 * Math.sin(phase * 3) * Math.exp(-t / 0.35);
+      0.035 * Math.sin(phase * 2) * Math.exp(-t / 0.7) +
+      0.008 * Math.sin(phase * 3) * Math.exp(-t / 0.35);
     const sample = tone * envelope * volume;
     for (const [delay, gain, spread] of taps) {
       const index = (Math.round((when + delay) * rate) + i) % length;
@@ -71,10 +71,10 @@ chords.forEach((chord, bar) => {
       2.5,
     ),
   );
-  note(melody[bar][0], start + 2.2 * beat, 0.075, -0.13, 3.2);
+  note(melody[bar][0] - 12, start + 2.2 * beat, 0.055, -0.13, 3.8);
 });
 // One-pole low-pass, warmed for two cycles to preserve continuity at the seam.
-const smoothing = 1 - Math.exp((-2 * Math.PI * 1900) / rate);
+const smoothing = 1 - Math.exp((-2 * Math.PI * 1200) / rate);
 for (const channel of channels) {
   let state = 0;
   for (let pass = 0; pass < 2; pass++)
