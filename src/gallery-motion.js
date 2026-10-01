@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import gsap from "gsap";
 import { waterVeil, waterVeilGLSL } from "./water-veil.js";
+import { CoverHover, coverAt, MAX_COVER_HOVERS } from "./cover-hover.js";
 import {
   clamp,
   damp,
@@ -36,6 +37,8 @@ const fragmentShader = /* glsl */ `
   uniform vec2 viewport;
   uniform vec2 maskEdges;
   uniform float waterAspect;
+  uniform vec4 coverHover[${MAX_COVER_HOVERS}];
+  uniform float columns;
   ${waterVeilGLSL}
   varying vec2 sheet;
   varying vec3 viewPosition;
@@ -73,6 +76,9 @@ const fragmentShader = /* glsl */ `
     vec2 flow = vec2(cos(wave) * .65 + cos(crossWave) * .35, sin(wave + crossWave) * .45);
     float rowY = mod(content, rowPitch);
     float columnX = mod(sheet.x * sheetWidth, columnPitch);
+    int cardIndex = int(floor(content / rowPitch) * columns + floor(sheet.x * sheetWidth / columnPitch));
+    vec4 hover = coverHover[clamp(cardIndex, 0, ${MAX_COVER_HOVERS - 1})];
+    float imageMask = step(columnX, cardWidth) * step(rowY, imageHeight);
     float photo = smoothstep(0., 14., columnX) * (1. - smoothstep(cardWidth - 14., cardWidth, columnX));
     photo *= smoothstep(0., 10., rowY) * (1. - smoothstep(imageHeight - 10., imageHeight, rowY));
     // One optical field for the complete sheet: the gutter and each card edge
@@ -104,6 +110,13 @@ const fragmentShader = /* glsl */ `
     vec2 imageMin = vec2((sheet.x * sheetWidth - columnX) / sheetWidth,
       1. - (floor(content / rowPitch) * rowPitch + imageHeight) / contentHeight);
     vec2 imageMax = imageMin + vec2(cardWidth / sheetWidth, imageHeight / contentHeight);
+    // Zoom the sampled photograph inside its original frame, never the mesh,
+    // alpha silhouette, caption, or pointer coordinates.
+    float zoom = 1. + hover.z * imageMask * .035;
+    vec2 imageCenter = (imageMin + imageMax) * .5;
+    uv = mix(uv, imageCenter + (uv - imageCenter) / zoom, imageMask);
+    dx /= zoom;
+    dy /= zoom;
     vec2 guard = abs(blur) + abs(split) + vec2(1. / sheetWidth, 1. / contentHeight);
     vec2 refracted = clamp(uv + waterShift, imageMin + guard, imageMax - guard);
     uv = mix(uv, refracted, photo * smoothstep(0., .6, length(lens.xy)));
@@ -123,6 +136,10 @@ const fragmentShader = /* glsl */ `
     float beam = exp(-pow((cardUv.x + cardUv.y - lightPhase + sin(wave) * .045) / .31, 2.));
     float sheen = beam * (.06 + .085 * abs(normal.z)) * photo;
     color.rgb = mix(color.rgb, vec3(.90, .98, 1.), sheen);
+    vec2 glowDelta = (cardUv - hover.xy) * vec2(cardWidth / imageHeight, 1.);
+    float glowRadius = .23 + hover.w * .13;
+    float glow = exp(-dot(glowDelta, glowDelta) / (glowRadius * glowRadius)) * hover.z * photo;
+    color.rgb = mix(color.rgb, vec3(.97, .98, 1.), glow * .085);
     // Fade only the paper itself at the heading; the sea/light stays continuous.
     color.a *= smoothstep(maskEdges.x, maskEdges.y, screenY);
     gl_FragColor = color;
@@ -145,6 +162,10 @@ export class GalleryMotion {
     this.cards = [...grid.querySelectorAll(".project-card")];
     this.pointer = new THREE.Vector2();
     this.pointerTarget = new THREE.Vector2();
+    this.coverHover = new CoverHover();
+    this.hoverPoint = null;
+    this.hoverHit = null;
+    this.hoverAge = 1;
     this.raycaster = new THREE.Raycaster();
     this.ndc = new THREE.Vector2();
     this.current = this.target = this.speed = this.time = 0;
@@ -188,6 +209,8 @@ export class GalleryMotion {
         dispersion: { value: 0.32 },
         viewport: { value: new THREE.Vector2(1, 1) },
         waterAspect: { value: 1 },
+        coverHover: { value: this.coverHover.values },
+        columns: { value: 2 },
         ...waterVeil.uniforms,
         maskEdges: { value: new THREE.Vector2(235, 315) },
         range: { value: new THREE.Vector2(-2600, 1200) },
@@ -204,6 +227,10 @@ export class GalleryMotion {
     addEventListener(
       "wheel",
       (event) => {
+        this.hoverPoint =
+          event.pointerType !== "touch" && event.target === this.canvas
+            ? { clientX: event.clientX, clientY: event.clientY }
+            : null;
         if (!this.active() || event.ctrlKey || event.metaKey) return;
         event.preventDefault();
         const unit =
@@ -237,6 +264,10 @@ export class GalleryMotion {
     addEventListener(
       "pointermove",
       (event) => {
+        this.hoverPoint =
+          event.pointerType !== "touch" && event.target === this.canvas
+            ? { clientX: event.clientX, clientY: event.clientY }
+            : null;
         if (event.pointerType !== "touch")
           this.pointerTarget.set(
             (event.clientX / innerWidth) * 2 - 1,
@@ -271,8 +302,43 @@ export class GalleryMotion {
     );
     document.documentElement.addEventListener(
       "pointerleave",
-      () => this.pointerTarget.set(0, 0),
+      () => {
+        this.pointerTarget.set(0, 0);
+        this.hoverPoint = null;
+      },
       { signal },
+    );
+    addEventListener(
+      "blur",
+      () => {
+        this.hoverPoint = null;
+      },
+      { signal },
+    );
+    this.canvas.addEventListener(
+      "pointerleave",
+      () => {
+        this.hoverPoint = null;
+      },
+      { signal },
+    );
+    grid.addEventListener(
+      "pointermove",
+      (event) => {
+        if (event.pointerType === "touch") return;
+        const cover = event.target.closest(".project-cover");
+        if (!cover) return;
+        const rect = cover.getBoundingClientRect();
+        cover.style.setProperty(
+          "--glow-x",
+          `${((event.clientX - rect.left) / rect.width) * 100}%`,
+        );
+        cover.style.setProperty(
+          "--glow-y",
+          `${((event.clientY - rect.top) / rect.height) * 100}%`,
+        );
+      },
+      { signal, passive: true },
     );
     this.canvas.addEventListener("click", (event) => this.pick(event), {
       signal,
@@ -364,6 +430,8 @@ export class GalleryMotion {
   }
 
   setCards() {
+    this.coverHover.reset();
+    this.hoverHit = null;
     const cards = [...this.grid.querySelectorAll(".project-card")];
     const changed =
       cards.length !== this.cards.length ||
@@ -377,6 +445,8 @@ export class GalleryMotion {
   }
 
   setActive(enabled) {
+    this.coverHover.reset();
+    this.hoverPoint = this.hoverHit = null;
     this.enabled = enabled;
     this.lastTime = performance.now();
     this.drag = null;
@@ -645,6 +715,7 @@ export class GalleryMotion {
     this.material.uniforms.atlas.value = texture;
     this.material.uniforms.contentHeight.value = this.contentHeight;
     this.material.uniforms.rowPitch.value = this.rowPitch;
+    this.material.uniforms.columns.value = columns;
     this.material.uniforms.imageHeight.value = imageHeight;
     this.material.uniforms.cardWidth.value = cardWidth;
     this.material.uniforms.columnPitch.value = cardWidth + gap;
@@ -722,6 +793,7 @@ export class GalleryMotion {
     this.material.uniforms.waterAspect.value = this.width / this.height;
     this.material.uniforms.dispersion.value =
       (this.mobile ? 0.22 : 0.32) + Math.min(Math.abs(this.speed) / 7000, 0.18);
+    this.updateHover(dt);
     this.renderer.render(this.scene, this.camera);
     if (import.meta.env.DEV) {
       this.canvas.dataset.travel = this.current.toFixed(2);
@@ -731,6 +803,47 @@ export class GalleryMotion {
       this.canvas.dataset.bend = this.bend.toFixed(2);
       this.canvas.dataset.filtering = String(this.filtering);
     }
+  }
+
+  updateHover(dt) {
+    this.hoverAge += dt;
+    if (!this.hoverPoint || this.drag || !this.active()) this.hoverHit = null;
+    else if (this.hoverAge >= 1 / 30) {
+      this.hoverAge = 0;
+      this.hoverHit = null;
+      const point = this.hoverPoint;
+      if (point.clientY >= this.material.uniforms.maskEdges.value.y) {
+        this.ndc.set(
+          (point.clientX / this.width) * 2 - 1,
+          1 - (point.clientY / this.height) * 2,
+        );
+        this.mesh.updateMatrixWorld();
+        this.camera.updateMatrixWorld();
+        this.raycaster.setFromCamera(this.ndc, this.camera);
+        for (const hit of this.raycaster.intersectObject(this.mesh)) {
+          const distance =
+            this.maximum + (this.minimum - this.maximum) * hit.uv.y;
+          const y = atlasPosition(
+            distance,
+            this.current,
+            this.start,
+            this.contentHeight,
+          );
+          if (y === null) continue;
+          const x = hit.uv.x * this.sheetWidth;
+          // The nearest opaque card owns the hover, including its caption.
+          if (!projectAt(x, y, this.regions)) continue;
+          this.hoverHit = coverAt(
+            x,
+            y,
+            this.regions,
+            this.material.uniforms.imageHeight.value,
+          );
+          break;
+        }
+      }
+    }
+    this.coverHover.update(dt, this.hoverHit);
   }
 
   pick(event) {
