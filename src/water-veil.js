@@ -1,4 +1,20 @@
-// Shared optical state: the sea and the separate paper renderer see one water layer.
+// Shared screen-space bubbles refract both the sea and the paper renderer.
+export const BUBBLE_COUNT = 40;
+const fract = (x) => x - Math.floor(x);
+export function bubbleAt(index, time) {
+  const seed = fract(index * 0.754877666 + 0.17);
+  const period = 8 + fract(index * 0.56984029) * 9;
+  const travel = fract(time / period + fract(index * 0.618033989));
+  const radius = 0.008 + seed * seed * 0.026;
+  return [
+    0.045 +
+      fract(index * 0.381966011 + 0.23) * 0.91 +
+      Math.sin(time * 0.7 + index * 2.3) * 0.014,
+    -0.14 + (travel * 0.72 + travel * travel * 0.28) * 1.3,
+    radius,
+    1 + Math.sin(time * 1.7 + index * 1.3) * 0.06,
+  ];
+}
 const smooth = (x) => {
   x = Math.max(0, Math.min(1, x));
   return x * x * (3 - 2 * x);
@@ -9,7 +25,16 @@ export class WaterVeilState {
       waterCover: { value: 0 },
       waterStrength: { value: 1 },
       waterTime: { value: 0 },
+      waterBubbles: { value: new Float32Array(BUBBLE_COUNT * 4) },
     };
+    this.refreshBubbles();
+  }
+  refreshBubbles() {
+    for (let i = 0; i < BUBBLE_COUNT; i++)
+      this.uniforms.waterBubbles.value.set(
+        bubbleAt(i, this.uniforms.waterTime.value),
+        i * 4,
+      );
   }
   settle(page) {
     this.crossing = null;
@@ -27,6 +52,7 @@ export class WaterVeilState {
       return;
     }
     this.uniforms.waterTime.value += delta;
+    this.refreshBubbles();
     if (!this.crossing) return;
     this.crossing.elapsed += delta;
     const { direction, elapsed } = this.crossing;
@@ -46,41 +72,31 @@ export const waterVeilGLSL = /* glsl */ `
   uniform float waterCover;
   uniform float waterStrength;
   uniform float waterTime;
-  // A curved meniscus bends rays most near the boundary. The signed light term
-  // gives a lit upper lip and a darker opposing lip, never a flat outlined ring.
-  vec4 waterDrop(vec2 uv, vec2 center, vec2 radius, float phase, float depth, float aspect) {
-    vec2 q = (uv - center) * vec2(aspect, 1.) / radius;
-    q.x += sin(q.y * 2.7 + phase) * .11;
-    q.y += sin(q.x * 3.1 - phase * .8) * .07;
+  uniform vec4 waterBubbles[${BUBBLE_COUNT}];
+  vec4 bubbleLens(vec2 uv, vec4 bubble, float aspect) {
+    vec2 q = (uv - bubble.xy) * vec2(aspect, bubble.w) / bubble.z;
+    // Most pixels are outside each small lens: avoid expensive optical work.
+    if (abs(q.x) > 1.05 || abs(q.y) > 1.05) return vec4(0.);
     float d = length(q);
+    if (d > 1.05) return vec4(0.);
     vec2 normal = q / max(d, .001);
-    float inside = 1. - smoothstep(.965, 1.025, d);
-    float shoulder = smoothstep(.35, .94, d) * inside;
-    float lip = exp(-pow((d - .965) / .037, 2.));
+    float inside = 1. - smoothstep(.94, 1.04, d);
+    float shoulder = smoothstep(.22, .94, d) * inside;
+    float lip = exp(-pow((d - .91) / .08, 2.));
     float incidence = dot(normal, normalize(vec2(-.6, .8)));
-    float light = lip * (max(incidence, 0.) * .85 - max(-incidence, 0.) * .45);
-    vec2 bend = -normal * shoulder * depth;
+    float light = lip * (.13 + max(incidence, 0.) * .7 - max(-incidence, 0.) * .3);
+    float glint = exp(-length(q - vec2(-.36,.61)) * 19.) * .38;
+    light += glint;
+    // Air in water produces a diverging lens with a stronger curved rim.
+    vec2 bend = normal * shoulder * (3. + bubble.z * 200.);
     return vec4(bend, light, shoulder);
   }
-  // Pixels outside the drops remain sharp. Broad pools and small droplets share
-  // one screen-space field across the background and the paper renderer.
+  // Independent sizes, rising speeds and sideways drift avoid rows or a looped sheet.
   vec4 waterLens(vec2 uv, float aspect) {
     float t = waterTime * .16;
     vec4 glass = vec4(0.);
-    float shape = min(aspect, 1.45);
-    glass += waterDrop(uv, vec2(.12 + sin(t*.43)*.025, .64 + sin(t*.6)*.035),
-      vec2(.24*shape, .30), t, 24., aspect);
-    glass += waterDrop(uv, vec2(.79 + sin(t*.51+2.)*.02, .34 + sin(t*.38)*.04),
-      vec2(.23*shape, .24), t*.83+3., 21., aspect);
-    glass += waterDrop(uv, vec2(.66, 1.02 + sin(t*.4)*.03),
-      vec2(.28*shape, .19), t*.7+5., 19., aspect);
-    for (int i = 0; i < 7; i++) {
-      float f = float(i);
-      vec2 center = vec2(fract(f*.381966+.28), fract(f*.618034+.19));
-      center += vec2(sin(t*.7+f)*.007, sin(t*.4+f*1.7)*.016);
-      float radius = .018 + fract(f*.437)*.025;
-      glass += waterDrop(uv, center, vec2(radius, radius*1.17), t*.3+f, 8.+radius*90., aspect);
-    }
+    for (int i = 0; i < ${BUBBLE_COUNT}; i++)
+      glass += bubbleLens(uv, waterBubbles[i], aspect);
     float boundary = mix(-.12, 1.12, waterCover);
     float covered = 1. - smoothstep(boundary - .085, boundary + .085,
       uv.y + sin(uv.x*9.+t)*.016);

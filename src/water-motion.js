@@ -177,7 +177,7 @@ export class WaterMotion {
         void main() {
           vec4 lens = waterLens(vUv, resolution.x / resolution.y);
           vec2 uv = clamp(vUv + lens.xy / resolution, .001, .999);
-          vec2 split = lens.xy / resolution * .024 * lens.w;
+          vec2 split = lens.xy / resolution * .075 * lens.w;
           vec4 color = texture2D(tDiffuse, uv);
           color.r = texture2D(tDiffuse, clamp(uv + split, .001, .999)).r;
           color.b = texture2D(tDiffuse, clamp(uv - split, .001, .999)).b;

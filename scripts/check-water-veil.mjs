@@ -1,7 +1,30 @@
 import assert from "node:assert/strict";
-import { WaterVeilState } from "../src/water-veil.js";
+import { WaterVeilState, BUBBLE_COUNT, bubbleAt } from "../src/water-veil.js";
 import { ScenePush } from "../src/scene-push.js";
 const veil = new WaterVeilState();
+assert(BUBBLE_COUNT >= 30, "A continuous field of many bubbles");
+for (let i = 0; i < BUBBLE_COUNT; i++) {
+  let previous = bubbleAt(i, 0);
+  for (let frame = 1; frame <= 600; frame++) {
+    const current = bubbleAt(i, frame / 10);
+    assert(current.every(Number.isFinite));
+    if (current[1] < previous[1]) {
+      assert(
+        previous[1] - previous[2] > 1 && current[1] + current[2] < 0,
+        "Bubbles recycle only after exiting the top and below the bottom",
+      );
+    } else assert(current[1] > previous[1], "Bubbles always rise");
+    assert(current[0] > 0 && current[0] < 1);
+    previous = current;
+  }
+}
+const frozenBubbles = veil.uniforms.waterBubbles.value.slice();
+veil.update(1, true);
+assert.deepEqual(
+  veil.uniforms.waterBubbles.value,
+  frozenBubbles,
+  "Reduced motion freezes bubble positions",
+);
 const cover = () => veil.uniforms.waterCover.value;
 veil.settle("work");
 assert.equal(cover(), 1, "Direct Work entry is already underwater");
