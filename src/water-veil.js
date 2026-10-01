@@ -101,22 +101,28 @@ export const waterVeilGLSL = /* glsl */ `
     vec2 q = (uv - bubble.xy) * vec2(aspect, bubble.w) / bubble.z;
     // Most pixels are outside each small lens: avoid expensive optical work.
     if (abs(q.x) > 1.05 || abs(q.y) > 1.05) return vec4(0.);
+    float angle = atan(q.y, q.x + .000001);
+    q *= 1. + .028 * sin(angle * 3. + waterTime * 1.2 + bubble.x * 11.);
     float d = length(q);
     if (d > 1.05) return vec4(0.);
     vec2 normal = q / max(d, .001);
     float inside = 1. - smoothstep(.94, 1.04, d);
     float z = sqrt(max(0., 1. - d*d));
-    // Clear spherical core, strong grazing-angle rim: Fresnel rather than a disk.
+    // Refraction spans the curved interior, with a clear axial center and a
+    // stronger grazing rim. Broad curvature avoids an empty outlined circle.
     float fresnel = pow(1. - z, 3.);
-    float shoulder = d * (.18 + fresnel * .82) * inside;
+    float shoulder = d * (.78 * z + fresnel * .85) * inside;
     float lip = exp(-pow((d - .973) / .025, 2.));
     float incidence = dot(normal, normalize(vec2(-.6, .8)));
     float light = lip * (.1 + max(incidence, 0.) * .48 - max(-incidence, 0.) * .14);
-    float glint = exp(-length(q - vec2(-.42,.65)) * 29.) * .72;
-    light += glint;
+    vec2 highlight = (q - vec2(-.38,.58)) * vec2(1.1, 1.8);
+    float glint = exp(-dot(highlight, highlight) * 48.) * .85;
+    float reflection = pow(max(dot(vec3(q, z), normalize(vec3(-.45,.65,.6))), 0.), 22.) * .2;
+    light += (glint + reflection) * inside;
     // Air in water produces a diverging lens with a stronger curved rim.
-    vec2 bend = normal * shoulder * (4. + bubble.z * 240.);
-    return vec4(bend, light, shoulder);
+    vec2 bend = normal * shoulder * (8. + bubble.z * 360.);
+    float film = smoothstep(.06, .55, d) * (.35 + fresnel * .65) * inside;
+    return vec4(bend, light, film);
   }
   // Independent sizes, rising speeds and sideways drift avoid rows or a looped sheet.
   vec4 waterLens(vec2 uv, float aspect) {
@@ -132,11 +138,12 @@ export const waterVeilGLSL = /* glsl */ `
     glass.zw = clamp(glass.zw, vec2(-.5, 0.), vec2(1., 1.));
     return glass * covered;
   }
-  // A faint angle-dependent spectrum appears only on the grazing rim.
+  // A broad, soft film spectrum follows the curved interior and grazing rim.
   vec3 bubbleSpectrum(vec4 lens) {
-    float phase = atan(lens.y, lens.x) * 2. + waterTime * .3;
+    if (lens.w < .00001) return vec3(0.);
+    float phase = atan(lens.y, lens.x + .000001) * 1.5 + length(lens.xy) * .28 + waterTime * .3;
     vec3 spectrum = .5 + .5 * cos(phase + vec3(0., 2.1, 4.2));
     // Signed tint stays visible against light cards without whitening the core.
-    return (spectrum - .3) * lens.w * lens.w * .24;
+    return (spectrum - .4) * lens.w * .20;
   }
 `;

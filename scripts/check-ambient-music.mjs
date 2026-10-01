@@ -48,8 +48,16 @@ for (const [name, seconds, loop] of [
 class Param {
   value = 0;
   target = 0;
-  cancelAndHoldAtTime() {}
-  cancelScheduledValues() {}
+  events = [];
+  cancelAndHoldAtTime() {
+    this.events = [];
+  }
+  cancelScheduledValues() {
+    this.events = [];
+  }
+  linearRampToValueAtTime(value, time) {
+    this.events.push({ value, time });
+  }
   setValueAtTime(v) {
     this.value = this.target = v;
   }
@@ -146,28 +154,40 @@ assert.equal(starts, 0, "Muted while loading prevents delayed playback");
 await Promise.all([player.setEnabled(true), player.setEnabled(true)]);
 assert.equal(
   starts,
-  2,
+  3,
   "Exactly one persistent source per background, even on rapid toggles",
 );
-assert(player.sources.sea.loop && player.sources.space.loop);
 assert(
-  Math.abs(player.filter.frequency.target - 900) < 1e-8,
+  player.sources.sea.loop &&
+    player.sources.underwater.loop &&
+    player.sources.space.loop,
+);
+assert(
+  player.submergedGain.gain.target === 1 &&
+    player.surfaceGain.gain.target === 0,
   "A route change while loading is preserved",
 );
 assert(
   player.sources.sea.playbackRate.value === 1,
-  "Underwater treatment preserves the original pitch and tempo",
+  "Surface loop preserves the original pitch and tempo",
 );
-assert.equal(player.body.gain.target, 1.5);
+assert.equal(player.filter.frequency.value, 720);
+assert.equal(player.depthFilter.frequency.value, 1050);
+assert.equal(player.sources.underwater.playbackRate.value, 2 ** (-2 / 12));
+assert.equal(player.body.gain.value, 3);
 assert.equal(player.reverb.normalize, false);
-assert.equal(player.driftOscillator, undefined);
+assert.equal(
+  player.pitchDrift.gain.value,
+  0,
+  "No pitch wobble outside a transition",
+);
 assert.equal(
   player.master.gain.target,
   0.2,
   "Master is quieter than the previous .36",
 );
 assert(
-  player.wet.gain.target > player.dry.gain.target * 2,
+  player.wet.gain.value > player.dry.gain.value * 4,
   "Underwater mix favors the diffuse tail over direct notes",
 );
 const impulseSamples = player.reverb.buffer.getChannelData(0);
@@ -198,7 +218,8 @@ assert(
   "Audible late reverb lasts beyond the note attack",
 );
 assert(
-  player.filter.connections.includes(player.reverb) &&
+  player.filter.connections.includes(player.depthFilter) &&
+    player.depthFilter.connections.includes(player.reverb) &&
     player.reverb.connections.includes(player.reverbTone) &&
     player.reverbTone.connections.includes(player.wet),
   "Filtered music feeds real convolution reverb",
@@ -207,12 +228,16 @@ player.transitionWater("work", "contact");
 assert.equal(
   player.sources.sea.playbackRate.value,
   1,
-  "Pitch stays stable when emerging",
+  "Surface base pitch is unchanged by temporary detune envelopes",
 );
-assert.equal(player.body.gain.target, 0);
-assert.equal(starts, 3);
-assert.equal(player.filter.frequency.target, 2600);
-assert.equal(player.wet.gain.target, 0);
+assert.equal(starts, 4);
+assert.equal(player.surfaceGain.gain.target, 1);
+assert.equal(player.submergedGain.gain.target, 0);
+assert.equal(player.sources.sea.detune.events.at(-1).value, 0);
+assert(
+  player.sources.sea.detune.events.some(({ value }) => value > 0),
+  "Emergence gently overshoots then settles",
+);
 assert.equal([...player.effects][0].source.buffer, player.buffers.emerge);
 player.transitionWater("contact", "work");
 assert.equal(
@@ -221,6 +246,33 @@ assert.equal(
   "A new cue replaces the previous transient",
 );
 assert.equal([...player.effects][0].source.buffer, player.buffers.dive);
+for (const id of ["sea", "underwater"]) {
+  const events = player.sources[id].detune.events;
+  assert.equal(events[0].value, -500, "Restore the five-semitone entry plunge");
+  assert.equal(
+    events.at(-1).value,
+    0,
+    "Transient pitch always returns to its base",
+  );
+  assert.equal(events.at(-1).time, player.context.currentTime + 2.6);
+}
+assert.equal(player.pitchDrift.gain.events.at(-1).value, 0);
+player.context.currentTime += 60;
+player.setScene("work", 0.25); // The navigation completion must retain the wet bus.
+assert.equal(
+  player.surfaceGain.gain.target,
+  0,
+  "Clean music remains muted after entry",
+);
+assert.equal(
+  player.submergedGain.gain.target,
+  1,
+  "Underwater music persists after the cue ends",
+);
+assert(player.sources.sea.connections.includes(player.surfaceFilter));
+assert(player.sources.underwater.connections.includes(player.body));
+assert(player.dry.connections.includes(player.submergedGain));
+assert(player.wet.connections.includes(player.submergedGain));
 player.setFlight(0, "work");
 const low = player.spaceGain.gain.target;
 player.setFlight(0.5, "work");
@@ -234,7 +286,8 @@ player.setFlight(1, "work");
 assert.equal(player.spaceGain.gain.target, 1);
 player.setFlight(0, "contact");
 assert.equal(player.spaceGain.gain.target, 0);
-assert.equal(player.filter.frequency.target, 2600);
+assert.equal(player.surfaceGain.gain.target, 1);
+assert.equal(player.submergedGain.gain.target, 0);
 assert.equal(player.spaceFilter.frequency.value, 1800);
 assert(player.sources.space.connections.includes(player.spaceFilter));
 const waterCue = [...player.effects][0];
@@ -270,8 +323,14 @@ await player.setEnabled(true);
 assert.equal(
   starts,
   beforeMute,
-  "Re-enabling reuses both loops and does not replay old cues",
+  "Re-enabling reuses all loops and does not replay old cues",
 );
+assert.equal(
+  player.sources.sea.detune.events.length,
+  0,
+  "Mute cancels pending pitch cues",
+);
+assert.equal(player.pitchDrift.gain.value, 0);
 await player.setEnabled(false);
 clearTimeout(player.suspendTimer);
 const direct = new AmbientMusic("gallery");
@@ -280,6 +339,13 @@ assert.equal(
   direct.master.gain.value,
   0,
   "Direct links remain silent until enabled",
+);
+const directWork = new AmbientMusic("work");
+assert.equal(directWork.surfaceGain.gain.value, 0);
+assert.equal(
+  directWork.submergedGain.gain.value,
+  1,
+  "Direct Work entry selects its persistent mix",
 );
 console.log(
   "Scene audio checks passed: PCM seams/headroom, preload race, routing, crossfade, cues, mute, and direct entry.",

@@ -34,6 +34,17 @@ export class AmbientMusic {
     this.master.connect(ctx.destination);
     this.seaGain = ctx.createGain();
     this.seaGain.connect(this.master);
+    // Two persistent, independent mixes. The clean surface path is fully muted
+    // underwater, rather than relying on a temporary transition filter.
+    this.surfaceGain = ctx.createGain();
+    this.surfaceGain.connect(this.seaGain);
+    this.submergedGain = ctx.createGain();
+    this.submergedGain.connect(this.seaGain);
+    this.surfaceFilter = ctx.createBiquadFilter();
+    this.surfaceFilter.type = "lowpass";
+    this.surfaceFilter.frequency.value = 2600;
+    this.surfaceFilter.Q.value = 0.55;
+    this.surfaceFilter.connect(this.surfaceGain);
     this.spaceGain = ctx.createGain();
     this.spaceGain.connect(this.master);
     this.spaceFilter = ctx.createBiquadFilter();
@@ -44,12 +55,23 @@ export class AmbientMusic {
     this.filter = ctx.createBiquadFilter();
     this.filter.type = "lowpass";
     this.filter.Q.value = 0.55;
+    this.filter.frequency.value = 720;
+    this.depthFilter = ctx.createBiquadFilter();
+    this.depthFilter.type = "lowpass";
+    this.depthFilter.frequency.value = 1050;
+    this.depthFilter.Q.value = 0.5;
     this.body = ctx.createBiquadFilter();
     this.body.type = "lowshelf";
     this.body.frequency.value = 220;
+    this.body.gain.value = 3;
     this.body.connect(this.filter);
+    this.filter.connect(this.depthFilter);
     this.dry = ctx.createGain();
     this.wet = ctx.createGain();
+    this.dry.gain.value = 0.22;
+    this.wet.gain.value = 1.05;
+    this.pitchDrift = ctx.createGain();
+    this.pitchDrift.gain.value = 0;
     this.reverb = ctx.createConvolver();
     this.reverb.normalize = false;
     this.reverb.buffer = createUnderwaterImpulse(ctx);
@@ -57,12 +79,12 @@ export class AmbientMusic {
     this.reverbTone.type = "lowpass";
     this.reverbTone.frequency.value = 1100;
     this.reverbTone.Q.value = 0.5;
-    this.filter.connect(this.dry);
-    this.dry.connect(this.seaGain);
-    this.filter.connect(this.reverb);
+    this.depthFilter.connect(this.dry);
+    this.dry.connect(this.submergedGain);
+    this.depthFilter.connect(this.reverb);
     this.reverb.connect(this.reverbTone);
     this.reverbTone.connect(this.wet);
-    this.wet.connect(this.seaGain);
+    this.wet.connect(this.submergedGain);
     this.effects = new Set();
     this.enabled = false;
     this.setScene(page, 0);
@@ -80,16 +102,10 @@ export class AmbientMusic {
     else param.setValueAtTime(value, now);
   }
   mix(space, submerged, duration) {
-    this.ramp(this.body.gain, submerged * 1.5, duration);
     this.ramp(this.seaGain.gain, Math.cos((space * Math.PI) / 2), duration);
     this.ramp(this.spaceGain.gain, Math.sin((space * Math.PI) / 2), duration);
-    this.ramp(
-      this.filter.frequency,
-      2600 * (900 / 2600) ** submerged,
-      duration,
-    );
-    this.ramp(this.dry.gain, 1 - submerged * 0.72, duration);
-    this.ramp(this.wet.gain, submerged * 0.95, duration);
+    this.ramp(this.surfaceGain.gain, submerged ? 0 : 1, duration);
+    this.ramp(this.submergedGain.gain, submerged ? 1 : 0, duration);
   }
   setScene(page, duration = 0.6) {
     this.page = page;
@@ -101,10 +117,31 @@ export class AmbientMusic {
   }
   transitionWater(from, to, duration = 1.8) {
     this.setScene(to, duration);
-    if (["index", "contact"].includes(from) && to === "work")
+    if (["index", "contact"].includes(from) && to === "work") {
       this.playEffect("dive");
-    else if (from === "work" && ["index", "contact"].includes(to))
+      this.waterPitch(true);
+    } else if (from === "work" && ["index", "contact"].includes(to)) {
       this.playEffect("emerge");
+      this.waterPitch(false);
+    }
+  }
+  waterPitch(entering) {
+    if (!this.enabled || !this.sources || this.context.state !== "running")
+      return;
+    const now = this.context.currentTime;
+    for (const id of ["sea", "underwater"]) {
+      const param = this.sources[id].detune;
+      this.ramp(param, 0, 0);
+      // Restore the five-semitone plunge and gently wavering recovery as a cue.
+      // These envelopes always end; the separate submerged mix stays active.
+      param.linearRampToValueAtTime(entering ? -500 : -360, now + 0.65);
+      param.linearRampToValueAtTime(entering ? -260 : 70, now + 1.35);
+      param.linearRampToValueAtTime(0, now + 2.6);
+    }
+    this.ramp(this.pitchDrift.gain, 0, 0);
+    this.pitchDrift.gain.linearRampToValueAtTime(14, now + 0.35);
+    this.pitchDrift.gain.linearRampToValueAtTime(14, now + 1.5);
+    this.pitchDrift.gain.linearRampToValueAtTime(0, now + 2.8);
   }
   stopEffects(kind) {
     for (const effect of this.effects) {
@@ -173,6 +210,9 @@ export class AmbientMusic {
     if (!enabled) {
       this.ramp(this.master.gain, 0, 0.24);
       this.stopEffects();
+      this.ramp(this.pitchDrift.gain, 0, 0);
+      for (const id of ["sea", "underwater"])
+        if (this.sources?.[id]) this.ramp(this.sources[id].detune, 0, 0);
       this.suspendTimer = setTimeout(() => {
         if (!this.enabled) this.context.suspend().catch(() => {});
       }, 450);
@@ -200,17 +240,24 @@ export class AmbientMusic {
       this.sources = {};
       const start = this.context.currentTime;
       for (const [id, target] of [
-        ["sea", this.body],
+        ["sea", this.surfaceFilter],
+        ["underwater", this.body],
         ["space", this.spaceFilter],
       ]) {
         const source = this.context.createBufferSource();
-        source.buffer = this.buffers[id];
+        source.buffer = this.buffers[id === "underwater" ? "sea" : id];
         source.loop = true;
-        source.playbackRate.value = 1;
+        source.playbackRate.value = id === "underwater" ? 2 ** (-2 / 12) : 1;
+        if (id !== "space") this.pitchDrift.connect(source.detune);
         source.connect(target);
         source.start(start);
         this.sources[id] = source;
       }
+      this.driftOscillator = this.context.createOscillator();
+      this.driftOscillator.type = "sine";
+      this.driftOscillator.frequency.value = 0.16;
+      this.driftOscillator.connect(this.pitchDrift);
+      this.driftOscillator.start(start);
     }
     // Previously .36: roughly 5 dB quieter before scene processing.
     this.ramp(this.master.gain, 0.2, 1.2);
