@@ -136,6 +136,7 @@ export const waterVeilGLSL = /* glsl */ `
   vec3 bubbleSpectrum(vec4 lens) {
     float phase = atan(lens.y, lens.x) * 2. + waterTime * .3;
     vec3 spectrum = .5 + .5 * cos(phase + vec3(0., 2.1, 4.2));
-    return spectrum * pow(lens.w, 3.) * .042;
+    // Signed tint stays visible against light cards without whitening the core.
+    return (spectrum - .3) * lens.w * lens.w * .24;
   }
 `;

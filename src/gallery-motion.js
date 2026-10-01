@@ -98,7 +98,7 @@ const fragmentShader = /* glsl */ `
     // samples would cut letters against their original alpha mask.
     float legibility = photo;
     vec2 waterShift = (dx * lens.x + dy * lens.y) * viewport.y * legibility;
-    split += (dx * lens.x + dy * lens.y) * viewport.y * .16 * lens.w * legibility;
+    split += (dx * lens.x + dy * lens.y) * viewport.y * .32 * lens.w * legibility;
     // Strong lenses must not pull the transparent atlas gutter into a photo.
     // Keep the entire dispersed/softened footprint inside that image rectangle.
     vec2 imageMin = vec2((sheet.x * sheetWidth - columnX) / sheetWidth,
