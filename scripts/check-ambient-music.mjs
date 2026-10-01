@@ -1,105 +1,212 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { AmbientMusic } from "../src/ambient-music.js";
-
-const wav = fs.readFileSync("public/audio/tidal-notes.wav");
-assert.equal(wav.toString("ascii", 0, 4), "RIFF");
-assert.equal(wav.readUInt16LE(22), 2);
-const rate = wav.readUInt32LE(24),
-  frames = wav.readUInt32LE(40) / 4;
-assert.equal(frames / rate, 60);
-let peak = 0,
-  energy = 0;
-for (let i = 44; i < wav.length; i += 2) {
-  const v = wav.readInt16LE(i) / 32768;
-  peak = Math.max(peak, Math.abs(v));
-  energy += v * v;
-}
-assert(
-  peak > 0.4 && peak < 0.55,
-  "Music must have headroom and non-silent content",
-);
-assert(
-  Math.sqrt(energy / (frames * 2)) < 0.18,
-  "Keep the loop gentle before the player volume is applied",
-);
-for (let c = 0; c < 2; c++) {
-  const sample = (i) => wav.readInt16LE(44 + i * 4 + c * 2);
-  const seam = Math.abs(sample(0) - sample(frames - 1));
-  let localStep = 0;
-  for (let i = 1; i < 150; i++)
-    localStep = Math.max(
-      localStep,
-      Math.abs(sample(i) - sample(i - 1)),
-      Math.abs(sample(frames - i) - sample(frames - i - 1)),
+import { AmbientMusic, prepareSceneAudio } from "../src/ambient-music.js";
+for (const [name, seconds, loop] of [
+  ["tidal-notes", 60, true],
+  ["distant-orbit", 72, true],
+  ["water-entry", 2.4, false],
+  ["water-emerge", 2.2, false],
+]) {
+  const wav = fs.readFileSync(`public/audio/${name}.wav`);
+  assert.equal(wav.toString("ascii", 0, 4), "RIFF");
+  assert.equal(wav.readUInt16LE(22), 2);
+  const rate = wav.readUInt32LE(24),
+    frames = wav.readUInt32LE(40) / 4;
+  assert.equal(frames / rate, seconds);
+  let peak = 0,
+    energy = 0;
+  for (let i = 44; i < wav.length; i += 2) {
+    const v = wav.readInt16LE(i) / 32768;
+    peak = Math.max(peak, Math.abs(v));
+    energy += v * v;
+  }
+  assert(peak > 0.3 && peak < 0.55, "Non-silent audio retains headroom");
+  assert(Math.sqrt(energy / (frames * 2)) < 0.18, "Keep average level gentle");
+  for (let c = 0; c < 2; c++) {
+    const sample = (i) => wav.readInt16LE(44 + i * 4 + c * 2);
+    if (!loop) {
+      assert(
+        Math.abs(sample(0)) < 2 && Math.abs(sample(frames - 1)) < 2,
+        "Effects begin and end silently",
+      );
+      continue;
+    }
+    let localStep = 0;
+    for (let i = 1; i < 150; i++)
+      localStep = Math.max(
+        localStep,
+        Math.abs(sample(i) - sample(i - 1)),
+        Math.abs(sample(frames - i) - sample(frames - i - 1)),
+      );
+    assert(
+      Math.abs(sample(0) - sample(frames - 1)) < localStep * 1.5,
+      "Loop seam does not introduce a click",
     );
-  assert(
-    seam < localStep * 1.5,
-    "The loop seam must not introduce a click-sized discontinuity",
-  );
+  }
+  console.log(name, { seconds, peak, rms: Math.sqrt(energy / (frames * 2)) });
 }
-let releaseFetch,
-  starts = 0,
-  resumes = 0;
-globalThis.fetch = () =>
-  new Promise((resolve) => {
-    releaseFetch = () =>
-      resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) });
-  });
+class Param {
+  value = 0;
+  target = 0;
+  cancelAndHoldAtTime() {}
+  cancelScheduledValues() {}
+  setValueAtTime(v) {
+    this.value = this.target = v;
+  }
+  setTargetAtTime(v) {
+    this.target = v;
+  }
+}
+class Node {
+  connections = [];
+  connect(n) {
+    this.connections.push(n);
+    return n;
+  }
+  disconnect() {
+    this.connections = [];
+  }
+}
+let starts = 0,
+  resumes = 0,
+  fetches = 0;
+const pending = [];
+globalThis.fetch = () => {
+  fetches++;
+  return new Promise((resolve) =>
+    pending.push(() =>
+      resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) }),
+    ),
+  );
+};
 globalThis.AudioContext = class {
   currentTime = 0;
+  sampleRate = 22050;
   destination = {};
+  state = "suspended";
   createGain() {
-    return {
-      gain: { value: 0, cancelScheduledValues() {}, setTargetAtTime() {} },
-      connect() {},
-    };
+    return Object.assign(new Node(), { gain: new Param() });
+  }
+  createBiquadFilter() {
+    return Object.assign(new Node(), {
+      frequency: new Param(),
+      Q: new Param(),
+    });
+  }
+  createConvolver() {
+    return new Node();
+  }
+  createBuffer(n, length) {
+    const data = Array.from({ length: n }, () => new Float32Array(length));
+    return { getChannelData: (c) => data[c] };
   }
   resume() {
     resumes++;
+    this.state = "running";
     return Promise.resolve();
   }
   suspend() {
+    this.state = "suspended";
     return Promise.resolve();
   }
   decodeAudioData() {
     return Promise.resolve({ duration: 60 });
   }
   createBufferSource() {
-    return {
-      connect() {},
+    return Object.assign(new Node(), {
       start() {
         starts++;
       },
-    };
+      stop() {
+        this.stopped = true;
+      },
+    });
   }
 };
-const player = new AmbientMusic();
+const preload = prepareSceneAudio();
+assert.equal(fetches, 4);
+assert.equal(resumes, 0, "Preloading never unlocks audio");
+const player = new AmbientMusic("index");
 const enabling = player.setEnabled(true);
 await Promise.resolve();
-assert.equal(
-  resumes,
-  1,
-  "Unlock audio immediately in the gesture, before fetching",
-);
+assert.equal(resumes, 1, "Unlock in the gesture before the fetch resolves");
+assert.equal(fetches, 4, "Preload and player share requests");
+player.setScene("work", 0);
 await player.setEnabled(false);
-releaseFetch();
+pending.forEach((release) => release());
+await preload;
 await enabling;
+assert.equal(starts, 0, "Muted while loading prevents delayed playback");
+await Promise.all([player.setEnabled(true), player.setEnabled(true)]);
 assert.equal(
   starts,
-  0,
-  "Turning sound off while loading must prevent late playback",
+  2,
+  "Exactly one persistent source per background, even on rapid toggles",
 );
-await player.setEnabled(true);
-await player.setEnabled(true);
+assert(player.sources.sea.loop && player.sources.space.loop);
+assert(
+  Math.abs(player.filter.frequency.target - 700) < 1e-8,
+  "A route change while loading is preserved",
+);
 assert.equal(
-  starts,
+  player.master.gain.target,
+  0.2,
+  "Master is quieter than the previous .36",
+);
+assert(player.wet.gain.target > 0);
+assert(
+  player.filter.connections.includes(player.reverb) &&
+    player.reverb.connections.includes(player.wet),
+  "Filtered music feeds real convolution reverb",
+);
+player.transitionWater("work", "contact");
+assert.equal(starts, 3);
+assert.equal(player.filter.frequency.target, 11000);
+assert.equal(player.wet.gain.target, 0);
+assert.equal([...player.effects][0].source.buffer, player.buffers.emerge);
+player.transitionWater("contact", "work");
+assert.equal(
+  player.effects.size,
   1,
-  "Repeated enabling must not layer multiple copies of the loop",
+  "A new cue replaces the previous transient",
 );
-assert.equal(player.source.loop, true);
+assert.equal([...player.effects][0].source.buffer, player.buffers.dive);
+player.setFlight(0, "work");
+const low = player.spaceGain.gain.target;
+player.setFlight(0.5, "work");
+const middle = player.spaceGain.gain.target;
+assert(low < middle && middle < 1);
+assert(
+  Math.abs(player.seaGain.gain.target ** 2 + middle ** 2 - 1) < 1e-10,
+  "Equal-power crossfade avoids a midpoint volume dip",
+);
+player.setFlight(1, "work");
+assert.equal(player.spaceGain.gain.target, 1);
+player.setFlight(0, "contact");
+assert.equal(player.spaceGain.gain.target, 0);
+assert.equal(player.filter.frequency.target, 11000);
+player.setScene("gallery", 0);
+assert.equal(player.spaceGain.gain.target, 1);
+const beforeMute = starts;
+await player.setEnabled(false);
+assert.equal(player.effects.size, 0);
+player.transitionWater("index", "work");
+assert.equal(starts, beforeMute, "Mute covers transition effects");
+await player.setEnabled(true);
+assert.equal(
+  starts,
+  beforeMute,
+  "Re-enabling reuses both loops and does not replay old cues",
+);
 await player.setEnabled(false);
 clearTimeout(player.suspendTimer);
+const direct = new AmbientMusic("gallery");
+assert.equal(direct.spaceGain.gain.value, 1);
+assert.equal(
+  direct.master.gain.value,
+  0,
+  "Direct links remain silent until enabled",
+);
 console.log(
-  "Music checks passed: 60-second stereo PCM, headroom, continuous seam, gesture unlock and rapid-toggle safety.",
+  "Scene audio checks passed: PCM seams/headroom, preload race, routing, crossfade, cues, mute, and direct entry.",
 );

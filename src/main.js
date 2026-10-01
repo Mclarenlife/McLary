@@ -8,7 +8,7 @@ import { arrowDown, arrowUp, asterisk, orbitIcon } from "./icons.js";
 import { OrbitalTransition } from "./orbital-transition.js";
 
 import { bindTimeControl, timeControlMarkup } from "./time-control.js";
-import { AmbientMusic } from "./ambient-music.js";
+import { AmbientMusic, prepareSceneAudio } from "./ambient-music.js";
 
 let timeControl;
 let scene;
@@ -145,15 +145,17 @@ function navigate(path) {
   if (navigation?.isActive()) return;
   if (normalize(path) === normalize(location.pathname)) return;
   if (menuOpen) toggleMenu(false);
+  const fromPage = page();
+  const nextPage = pages[normalize(path)] || "404";
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (reduced || !entered) {
+    audio?.transitionWater(fromPage, nextPage, 0.5);
     history.pushState({}, "", path);
     galleryEntry.value = 0;
     showPage();
     return;
   }
   const main = document.querySelector("main");
-  const nextPage = pages[normalize(path)] || "404";
   if (nextPage === "gallery" || page() === "gallery") {
     const beginFlight = () => {
       scene?.cancelTransition();
@@ -169,6 +171,7 @@ function navigate(path) {
         },
         () => {
           if (scene) scene.orbitalActive = false;
+          audio?.setScene(nextPage, 0.25);
           if (nextPage === "work") navigation = galleryMotion?.enterForRoute();
         },
         { scene, entering: nextPage === "gallery", destination: nextPage },
@@ -223,6 +226,7 @@ function navigate(path) {
         canvas.style.clipPath = `inset(${Math.max(0, top) * 100}% 0 ${Math.max(0, 1 - top - height) * 100}% 0)`;
     },
     onComplete: () => {
+      audio?.setScene(nextPage, 0.25);
       document.querySelector("main").style.pointerEvents = "";
       main.querySelectorAll(".work-mask,.work-backdrop").forEach((layer) => {
         layer.style.transform = "";
@@ -232,6 +236,8 @@ function navigate(path) {
       if (canvas) canvas.style.clipPath = "";
     },
   });
+  // The initial .38 seconds are anticipation; water crosses the camera on release.
+  navigation.call(() => audio?.transitionWater(fromPage, nextPage), [], 0.38);
   navigation.to(
     outgoing,
     {
@@ -302,6 +308,7 @@ function navigate(path) {
   );
 }
 function navigateOcean(path, nextPage, main) {
+  audio?.setScene(nextPage);
   main.style.pointerEvents = "none";
   const outgoing = main.querySelector(".hero,.contact-copy");
   scene.setPage(nextPage);
@@ -455,7 +462,7 @@ async function toggleSound(enabled = !soundOn) {
   soundOn = enabled;
   updateSoundButton();
   try {
-    if (!audio && soundOn) audio = new AmbientMusic();
+    if (!audio && soundOn) audio = new AmbientMusic(page());
     await audio?.setEnabled(soundOn);
   } catch {
     soundOn = false;
@@ -503,6 +510,8 @@ function enter(withSound = false) {
 shell();
 timeControl = bindTimeControl((mode) => scene?.setTimeMode(mode));
 orbital = new OrbitalTransition();
+orbital.onProgress = (progress, surfacePage) =>
+  audio?.setFlight(progress, surfacePage);
 showPage();
 document.querySelector("main").inert = true;
 document.querySelector("header").inert = true;
@@ -514,6 +523,10 @@ intro.setAttribute("aria-label", "Welcome to McLary");
 intro.innerHTML = `<div class="intro-inner"><div class="intro-symbol" aria-hidden="true">M.</div><h2>MCLARY</h2><p>${profile.introduction}</p><button class="pill" id="enter" disabled>Preparing your space</button><div class="intro-progress" role="progressbar" aria-label="Loading portfolio" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div><p class="intro-status" role="status">Loading your projects · 0%</p></div><button class="muted-entry" disabled>ENTER WITHOUT AUDIO</button>`;
 document.body.append(intro);
 async function start() {
+  // Fetch only: creating/resuming an AudioContext still requires the sound gesture.
+  prepareSceneAudio().catch((error) =>
+    console.warn("Audio preload unavailable", error),
+  );
   const galleryPrepared = prepareWork();
   try {
     scene = new PortfolioScene(document.querySelector("#scene"));
@@ -612,6 +625,8 @@ addEventListener("popstate", () => {
   document.querySelector("main").style.pointerEvents = "";
   if (menuOpen) toggleMenu(false);
   showPage();
+  audio?.stopEffects();
+  audio?.transitionWater(audio.page, page(), 0.6);
 });
 // Resizing or changing the motion preference settles at the destination, rather
 // than leaving a viewport-sized lens or an inert interface behind.

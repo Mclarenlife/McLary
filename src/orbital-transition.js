@@ -156,6 +156,7 @@ export class OrbitalTransition {
   }
   update() {
     const p = this.state.progress;
+    this.onProgress?.(p, this.surfacePage);
     const pose = orbitalPose(p, innerWidth < 650);
     this.material.uniforms.progress.value = p;
     if ((this.entering && p >= 0.18) || (!this.entering && p <= 0.18))
