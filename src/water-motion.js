@@ -183,7 +183,7 @@ export class WaterMotion {
           color.b = texture2D(tDiffuse, clamp(uv - split, .001, .999)).b;
           color.rgb *= 1. + lens.z * .23;
           color.rgb += max(lens.z, 0.) * vec3(.035, .042, .045);
-          color.rgb += bubbleSpectrum(lens);
+          color.rgb += bubbleSpectrum(lens, color.rgb);
           gl_FragColor = color;
         }
       `,

@@ -115,7 +115,7 @@ const fragmentShader = /* glsl */ `
     vec4 color = vec4(mix(soft.rgb, vec3(red.r, soft.g, blue.b), min(red.a, blue.a)), soft.a);
     color.rgb *= 1. + lens.z * .23 * legibility;
     color.rgb += max(lens.z, 0.) * vec3(.035, .042, .045) * legibility;
-    color.rgb += bubbleSpectrum(lens) * legibility;
+    color.rgb += bubbleSpectrum(lens, color.rgb) * legibility;
     color.rgb *= .85 + .15 * abs(normal.z);
     // A broad, softly refracted highlight travels diagonally across the photos.
     vec2 cardUv = vec2(columnX / cardWidth, rowY / imageHeight);

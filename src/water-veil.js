@@ -139,11 +139,12 @@ export const waterVeilGLSL = /* glsl */ `
     return glass * covered;
   }
   // A broad, soft film spectrum follows the curved interior and grazing rim.
-  vec3 bubbleSpectrum(vec4 lens) {
+  vec3 bubbleSpectrum(vec4 lens, vec3 background) {
     if (lens.w < .00001) return vec3(0.);
     float phase = atan(lens.y, lens.x + .000001) * 1.5 + length(lens.xy) * .28 + waterTime * .3;
     vec3 spectrum = .5 + .5 * cos(phase + vec3(0., 2.1, 4.2));
     // Signed tint stays visible against light cards without whitening the core.
-    return (spectrum - .4) * lens.w * .20;
+    float illumination = sqrt(max(0., dot(background, vec3(.2126,.7152,.0722))));
+    return (spectrum - .4) * lens.w * .20 * (.08 + .7 * illumination);
   }
 `;
