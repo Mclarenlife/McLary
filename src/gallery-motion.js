@@ -106,7 +106,7 @@ const fragmentShader = /* glsl */ `
     vec2 imageMax = imageMin + vec2(cardWidth / sheetWidth, imageHeight / contentHeight);
     vec2 guard = abs(blur) + abs(split) + vec2(1. / sheetWidth, 1. / contentHeight);
     vec2 refracted = clamp(uv + waterShift, imageMin + guard, imageMax - guard);
-    uv = mix(uv, refracted, photo * smoothstep(0., .08, lens.w));
+    uv = mix(uv, refracted, photo * smoothstep(0., .6, length(lens.xy)));
     // One continuous sampling path: blur smoothly reaches zero in the center.
     // A threshold here used to outline the optical field as a moving rectangle.
     vec4 soft = softened(uv, blur, dx, dy);

@@ -121,7 +121,7 @@ export const waterVeilGLSL = /* glsl */ `
     light += (glint + reflection) * inside;
     // Air in water produces a diverging lens with a stronger curved rim.
     vec2 bend = normal * shoulder * (8. + bubble.z * 360.);
-    float film = smoothstep(.06, .55, d) * (.35 + fresnel * .65) * inside;
+    float film = smoothstep(.83, .95, d) * inside;
     return vec4(bend, light, film);
   }
   // Independent sizes, rising speeds and sideways drift avoid rows or a looped sheet.
@@ -138,7 +138,7 @@ export const waterVeilGLSL = /* glsl */ `
     glass.zw = clamp(glass.zw, vec2(-.5, 0.), vec2(1., 1.));
     return glass * covered;
   }
-  // A broad, soft film spectrum follows the curved interior and grazing rim.
+  // Color belongs only to the outer rim; interior curvature remains colorless.
   vec3 bubbleSpectrum(vec4 lens, vec3 background) {
     if (lens.w < .00001) return vec3(0.);
     float phase = atan(lens.y, lens.x + .000001) * 1.5 + length(lens.xy) * .28 + waterTime * .3;

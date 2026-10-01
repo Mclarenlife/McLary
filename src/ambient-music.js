@@ -34,7 +34,7 @@ export class AmbientMusic {
     this.master.connect(ctx.destination);
     this.seaGain = ctx.createGain();
     this.seaGain.connect(this.master);
-    // Two persistent, independent mixes. The clean surface path is fully muted
+    // Two persistent mixes from one source. The clean surface path is fully muted
     // underwater, rather than relying on a temporary transition filter.
     this.surfaceGain = ctx.createGain();
     this.surfaceGain.connect(this.seaGain);
@@ -102,6 +102,12 @@ export class AmbientMusic {
     else param.setValueAtTime(value, now);
   }
   mix(space, submerged, duration) {
+    // Match 5516e61: one exponential playback-rate glide, no detune overshoot
+    // or second pitch-shifted loop beating against the original during a fade.
+    this.seaRate = 2 ** ((-5 * submerged) / 12);
+    if (this.sources?.sea)
+      this.ramp(this.sources.sea.playbackRate, this.seaRate, duration);
+    this.ramp(this.pitchDrift.gain, submerged * 14, duration);
     this.ramp(this.seaGain.gain, Math.cos((space * Math.PI) / 2), duration);
     this.ramp(this.spaceGain.gain, Math.sin((space * Math.PI) / 2), duration);
     this.ramp(this.surfaceGain.gain, submerged ? 0 : 1, duration);
@@ -119,29 +125,9 @@ export class AmbientMusic {
     this.setScene(to, duration);
     if (["index", "contact"].includes(from) && to === "work") {
       this.playEffect("dive");
-      this.waterPitch(true);
     } else if (from === "work" && ["index", "contact"].includes(to)) {
       this.playEffect("emerge");
-      this.waterPitch(false);
     }
-  }
-  waterPitch(entering) {
-    if (!this.enabled || !this.sources || this.context.state !== "running")
-      return;
-    const now = this.context.currentTime;
-    for (const id of ["sea", "underwater"]) {
-      const param = this.sources[id].detune;
-      this.ramp(param, 0, 0);
-      // Restore the five-semitone plunge and gently wavering recovery as a cue.
-      // These envelopes always end; the separate submerged mix stays active.
-      param.linearRampToValueAtTime(entering ? -500 : -360, now + 0.65);
-      param.linearRampToValueAtTime(entering ? -260 : 70, now + 1.35);
-      param.linearRampToValueAtTime(0, now + 2.6);
-    }
-    this.ramp(this.pitchDrift.gain, 0, 0);
-    this.pitchDrift.gain.linearRampToValueAtTime(14, now + 0.35);
-    this.pitchDrift.gain.linearRampToValueAtTime(14, now + 1.5);
-    this.pitchDrift.gain.linearRampToValueAtTime(0, now + 2.8);
   }
   stopEffects(kind) {
     for (const effect of this.effects) {
@@ -185,7 +171,7 @@ export class AmbientMusic {
       }
       this.uiBuffers[action] = buffer;
     }
-    this.playBuffer(this.uiBuffers[action], 0.38, "ui");
+    this.playBuffer(this.uiBuffers[action], 0.85, "ui");
   }
   playBuffer(buffer, level, kind) {
     this.stopEffects(kind);
@@ -210,9 +196,6 @@ export class AmbientMusic {
     if (!enabled) {
       this.ramp(this.master.gain, 0, 0.24);
       this.stopEffects();
-      this.ramp(this.pitchDrift.gain, 0, 0);
-      for (const id of ["sea", "underwater"])
-        if (this.sources?.[id]) this.ramp(this.sources[id].detune, 0, 0);
       this.suspendTimer = setTimeout(() => {
         if (!this.enabled) this.context.suspend().catch(() => {});
       }, 450);
@@ -241,14 +224,16 @@ export class AmbientMusic {
       const start = this.context.currentTime;
       for (const [id, target] of [
         ["sea", this.surfaceFilter],
-        ["underwater", this.body],
         ["space", this.spaceFilter],
       ]) {
         const source = this.context.createBufferSource();
-        source.buffer = this.buffers[id === "underwater" ? "sea" : id];
+        source.buffer = this.buffers[id];
         source.loop = true;
-        source.playbackRate.value = id === "underwater" ? 2 ** (-2 / 12) : 1;
-        if (id !== "space") this.pitchDrift.connect(source.detune);
+        source.playbackRate.value = id === "sea" ? this.seaRate : 1;
+        if (id === "sea") {
+          this.pitchDrift.connect(source.detune);
+          source.connect(this.body);
+        }
         source.connect(target);
         source.start(start);
         this.sources[id] = source;

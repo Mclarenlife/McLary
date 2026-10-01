@@ -61,8 +61,9 @@ class Param {
   setValueAtTime(v) {
     this.value = this.target = v;
   }
-  setTargetAtTime(v) {
+  setTargetAtTime(v, time, timeConstant) {
     this.target = v;
+    this.events.push({ value: v, time, timeConstant });
   }
 }
 class Node {
@@ -154,33 +155,34 @@ assert.equal(starts, 0, "Muted while loading prevents delayed playback");
 await Promise.all([player.setEnabled(true), player.setEnabled(true)]);
 assert.equal(
   starts,
-  3,
+  2,
   "Exactly one persistent source per background, even on rapid toggles",
 );
-assert(
-  player.sources.sea.loop &&
-    player.sources.underwater.loop &&
-    player.sources.space.loop,
-);
+assert(player.sources.sea.loop && player.sources.space.loop);
 assert(
   player.submergedGain.gain.target === 1 &&
     player.surfaceGain.gain.target === 0,
   "A route change while loading is preserved",
 );
 assert(
-  player.sources.sea.playbackRate.value === 1,
-  "Surface loop preserves the original pitch and tempo",
+  player.sources.sea.playbackRate.value === 2 ** (-5 / 12),
+  "Direct Work playback uses the historical five-semitone pitch",
 );
 assert.equal(player.filter.frequency.value, 720);
 assert.equal(player.depthFilter.frequency.value, 1050);
-assert.equal(player.sources.underwater.playbackRate.value, 2 ** (-2 / 12));
+assert.equal(
+  player.sources.underwater,
+  undefined,
+  "No differently pitched duplicate loop",
+);
 assert.equal(player.body.gain.value, 3);
 assert.equal(player.reverb.normalize, false);
 assert.equal(
   player.pitchDrift.gain.value,
-  0,
-  "No pitch wobble outside a transition",
+  14,
+  "Historical submerged drift depth is preserved",
 );
+assert.equal(player.driftOscillator.frequency.value, 0.16);
 assert.equal(
   player.master.gain.target,
   0.2,
@@ -226,18 +228,19 @@ assert(
 );
 player.transitionWater("work", "contact");
 assert.equal(
-  player.sources.sea.playbackRate.value,
+  player.sources.sea.playbackRate.target,
   1,
-  "Surface base pitch is unchanged by temporary detune envelopes",
+  "Emerging restores the original rate monotonically",
 );
-assert.equal(starts, 4);
+assert.equal(starts, 3);
 assert.equal(player.surfaceGain.gain.target, 1);
 assert.equal(player.submergedGain.gain.target, 0);
-assert.equal(player.sources.sea.detune.events.at(-1).value, 0);
-assert(
-  player.sources.sea.detune.events.some(({ value }) => value > 0),
-  "Emergence gently overshoots then settles",
+assert.equal(
+  player.sources.sea.detune.events.length,
+  0,
+  "No synthetic detune overshoot",
 );
+assert.equal(player.pitchDrift.gain.target, 0);
 assert.equal([...player.effects][0].source.buffer, player.buffers.emerge);
 player.transitionWater("contact", "work");
 assert.equal(
@@ -246,17 +249,19 @@ assert.equal(
   "A new cue replaces the previous transient",
 );
 assert.equal([...player.effects][0].source.buffer, player.buffers.dive);
-for (const id of ["sea", "underwater"]) {
-  const events = player.sources[id].detune.events;
-  assert.equal(events[0].value, -500, "Restore the five-semitone entry plunge");
-  assert.equal(
-    events.at(-1).value,
-    0,
-    "Transient pitch always returns to its base",
-  );
-  assert.equal(events.at(-1).time, player.context.currentTime + 2.6);
-}
-assert.equal(player.pitchDrift.gain.events.at(-1).value, 0);
+assert.equal(player.sources.sea.playbackRate.target, 2 ** (-5 / 12));
+assert.deepEqual(
+  player.sources.sea.playbackRate.events,
+  [
+    {
+      value: 2 ** (-5 / 12),
+      time: player.context.currentTime,
+      timeConstant: 1.8 / 4,
+    },
+  ],
+  "Historical single exponential glide, without a long recovery envelope",
+);
+assert.equal(player.pitchDrift.gain.target, 14);
 player.context.currentTime += 60;
 player.setScene("work", 0.25); // The navigation completion must retain the wet bus.
 assert.equal(
@@ -270,7 +275,7 @@ assert.equal(
   "Underwater music persists after the cue ends",
 );
 assert(player.sources.sea.connections.includes(player.surfaceFilter));
-assert(player.sources.underwater.connections.includes(player.body));
+assert(player.sources.sea.connections.includes(player.body));
 assert(player.dry.connections.includes(player.submergedGain));
 assert(player.wet.connections.includes(player.submergedGain));
 player.setFlight(0, "work");
@@ -292,6 +297,11 @@ assert.equal(player.spaceFilter.frequency.value, 1800);
 assert(player.sources.space.connections.includes(player.spaceFilter));
 const waterCue = [...player.effects][0];
 player.playUI("open");
+assert.equal(
+  [...player.effects].find((x) => x.kind === "ui").gain.gain.value,
+  0.85,
+  "UI cues are about 7 dB louder",
+);
 assert.equal(
   player.effects.size,
   2,
@@ -328,9 +338,13 @@ assert.equal(
 assert.equal(
   player.sources.sea.detune.events.length,
   0,
-  "Mute cancels pending pitch cues",
+  "No queued detune cue can replay when unmuting",
 );
-assert.equal(player.pitchDrift.gain.value, 0);
+assert.equal(
+  player.pitchDrift.gain.target,
+  14,
+  "Unmuting retains the current underwater mix",
+);
 await player.setEnabled(false);
 clearTimeout(player.suspendTimer);
 const direct = new AmbientMusic("gallery");
