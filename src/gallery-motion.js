@@ -98,7 +98,7 @@ const fragmentShader = /* glsl */ `
     // samples would cut letters against their original alpha mask.
     float legibility = photo;
     vec2 waterShift = (dx * lens.x + dy * lens.y) * viewport.y * legibility;
-    split += (dx * lens.x + dy * lens.y) * viewport.y * .075 * lens.w * legibility;
+    split += (dx * lens.x + dy * lens.y) * viewport.y * .16 * lens.w * legibility;
     // Strong lenses must not pull the transparent atlas gutter into a photo.
     // Keep the entire dispersed/softened footprint inside that image rectangle.
     vec2 imageMin = vec2((sheet.x * sheetWidth - columnX) / sheetWidth,
@@ -115,6 +115,7 @@ const fragmentShader = /* glsl */ `
     vec4 color = vec4(mix(soft.rgb, vec3(red.r, soft.g, blue.b), min(red.a, blue.a)), soft.a);
     color.rgb *= 1. + lens.z * .23 * legibility;
     color.rgb += max(lens.z, 0.) * vec3(.035, .042, .045) * legibility;
+    color.rgb += bubbleSpectrum(lens) * legibility;
     color.rgb *= .85 + .15 * abs(normal.z);
     // A broad, softly refracted highlight travels diagonally across the photos.
     vec2 cardUv = vec2(columnX / cardWidth, rowY / imageHeight);

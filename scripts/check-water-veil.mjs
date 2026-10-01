@@ -2,21 +2,24 @@ import assert from "node:assert/strict";
 import { WaterVeilState, BUBBLE_COUNT, bubbleAt } from "../src/water-veil.js";
 import { ScenePush } from "../src/scene-push.js";
 const veil = new WaterVeilState();
-assert(BUBBLE_COUNT >= 30, "A continuous field of many bubbles");
+assert(BUBBLE_COUNT >= 30, "A substantial entry burst");
 for (let i = 0; i < BUBBLE_COUNT; i++) {
   let previous = bubbleAt(i, 0);
   for (let frame = 1; frame <= 600; frame++) {
     const current = bubbleAt(i, frame / 10);
     assert(current.every(Number.isFinite));
-    if (current[1] < previous[1]) {
-      assert(
-        previous[1] - previous[2] > 1 && current[1] + current[2] < 0,
-        "Bubbles recycle only after exiting the top and below the bottom",
-      );
-    } else assert(current[1] > previous[1], "Bubbles always rise");
+    assert(current[1] >= previous[1], "Bubbles rise once and never recycle");
     assert(current[0] > 0 && current[0] < 1);
     previous = current;
   }
+  assert(
+    bubbleAt(i, 0)[1] + bubbleAt(i, 0)[2] < 0,
+    "Every bubble starts below the screen",
+  );
+  assert(
+    bubbleAt(i, 5.8)[1] - bubbleAt(i, 5.8)[2] > 1,
+    "All bubbles have exited before shutdown",
+  );
 }
 const frozenBubbles = veil.uniforms.waterBubbles.value.slice();
 veil.update(1, true);
@@ -52,9 +55,21 @@ assert.equal(cover(), 1);
 assert.equal(veil.uniforms.waterStrength.value, 1);
 veil.update(5, false);
 assert.equal(
-  cover(),
+  veil.uniforms.bubblePresence.value,
+  0,
+  "Entry burst finishes while Work remains open",
+);
+veil.settle("work");
+assert.equal(
+  veil.uniforms.bubblePresence.value,
+  0,
+  "Settling or resizing Work must not restart bubbles",
+);
+veil.burst();
+assert.equal(
+  veil.uniforms.bubblePresence.value,
   1,
-  "Work retains its living water layer after the transition",
+  "Dismissing the preload screen can start the direct-entry burst",
 );
 veil.cross(-1);
 veil.update(0.7, false);
@@ -98,5 +113,5 @@ assert(
 );
 push.target.dispose();
 console.log(
-  "Water veil checks passed: entry, downward clearing, persistent focus, route cancellation, reduced motion and capture cleanup.",
+  "Bubble checks passed: finite entry burst, no recycling, restart rules, reduced motion and capture cleanup.",
 );

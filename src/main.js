@@ -9,6 +9,7 @@ import { OrbitalTransition } from "./orbital-transition.js";
 
 import { bindTimeControl, timeControlMarkup } from "./time-control.js";
 import { AmbientMusic, prepareSceneAudio } from "./ambient-music.js";
+import { waterVeil } from "./water-veil.js";
 
 let timeControl;
 let scene;
@@ -173,6 +174,7 @@ function navigate(path) {
         () => {
           if (scene) scene.orbitalActive = false;
           audio?.setScene(nextPage, 0.25);
+          if (nextPage === "work") waterVeil.burst();
           if (nextPage === "work") navigation = galleryMotion?.enterForRoute();
         },
         { scene, entering: nextPage === "gallery", destination: nextPage },
@@ -482,6 +484,7 @@ function updateSoundButton() {
 function enter(withSound = false) {
   if (entered) return;
   entered = true;
+  if (page() === "work") waterVeil.burst();
   if (scene) scene.entered = true;
   if (withSound) toggleSound(true);
   const intro = document.querySelector(".intro");

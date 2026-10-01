@@ -151,16 +151,16 @@ assert.equal(
 );
 assert(player.sources.sea.loop && player.sources.space.loop);
 assert(
-  Math.abs(player.filter.frequency.target - 300) < 1e-8,
+  Math.abs(player.filter.frequency.target - 900) < 1e-8,
   "A route change while loading is preserved",
 );
 assert(
-  Math.abs(player.sources.sea.playbackRate.value - 2 ** (-5 / 12)) < 1e-8,
-  "Direct underwater playback starts five semitones lower",
+  player.sources.sea.playbackRate.value === 1,
+  "Underwater treatment preserves the original pitch and tempo",
 );
-assert(player.pitchDrift.connections.includes(player.sources.sea.detune));
-assert.equal(player.pitchDrift.gain.target, 14);
-assert.equal(player.body.gain.target, 4.5);
+assert.equal(player.body.gain.target, 1.5);
+assert.equal(player.reverb.normalize, false);
+assert.equal(player.driftOscillator, undefined);
 assert.equal(
   player.master.gain.target,
   0.2,
@@ -171,6 +171,22 @@ assert(
   "Underwater mix favors the diffuse tail over direct notes",
 );
 const impulseSamples = player.reverb.buffer.getChannelData(0);
+assert(
+  impulseSamples
+    .slice(0, Math.floor(player.context.sampleRate * 0.06))
+    .every((x) => x === 0),
+  "Wet reflections have real pre-delay",
+);
+assert(
+  Math.abs(impulseSamples.reduce((sum, x) => sum + Math.abs(x), 0) - 1.6) <
+    1e-5,
+  "IR convolution level is explicitly bounded",
+);
+assert.notDeepEqual(
+  impulseSamples,
+  player.reverb.buffer.getChannelData(1),
+  "Stereo reflections have different delays",
+);
 let earlyEnergy = 0,
   lateEnergy = 0;
 impulseSamples.forEach((sample, i) => {
@@ -189,14 +205,9 @@ assert(
 );
 player.transitionWater("work", "contact");
 assert.equal(
-  player.sources.sea.playbackRate.target,
+  player.sources.sea.playbackRate.value,
   1,
-  "Emerging restores original pitch",
-);
-assert.equal(
-  player.pitchDrift.gain.target,
-  0,
-  "Surface music has no underwater pitch drift",
+  "Pitch stays stable when emerging",
 );
 assert.equal(player.body.gain.target, 0);
 assert.equal(starts, 3);

@@ -1,3 +1,4 @@
+import { createUnderwaterImpulse } from "./underwater-impulse.js";
 const assets = {
   sea: "/audio/tidal-notes.wav?v=3",
   space: "/audio/distant-orbit.wav?v=2",
@@ -47,36 +48,14 @@ export class AmbientMusic {
     this.body.type = "lowshelf";
     this.body.frequency.value = 220;
     this.body.connect(this.filter);
-    this.pitchDrift = ctx.createGain();
-    this.pitchDrift.gain.value = 0;
     this.dry = ctx.createGain();
     this.wet = ctx.createGain();
     this.reverb = ctx.createConvolver();
-    const impulse = ctx.createBuffer(
-      2,
-      Math.round(ctx.sampleRate * 3.4),
-      ctx.sampleRate,
-    );
-    let seed = 93;
-    for (let c = 0; c < 2; c++) {
-      const samples = impulse.getChannelData(c);
-      let low = 0;
-      for (let i = 0; i < samples.length; i++) {
-        seed = (seed * 1664525 + 1013904223) >>> 0;
-        low += ((seed / 4294967296) * 2 - 1 - low) * 0.13;
-        const t = i / ctx.sampleRate;
-        // Diffuse late energy: a slower bloom separates it from the dry note.
-        samples[i] =
-          low *
-          (1 - Math.exp(-t / 0.08)) *
-          Math.exp(-t * 1.45) *
-          (1 - i / samples.length);
-      }
-    }
-    this.reverb.buffer = impulse;
+    this.reverb.normalize = false;
+    this.reverb.buffer = createUnderwaterImpulse(ctx);
     this.reverbTone = ctx.createBiquadFilter();
     this.reverbTone.type = "lowpass";
-    this.reverbTone.frequency.value = 780;
+    this.reverbTone.frequency.value = 1100;
     this.reverbTone.Q.value = 0.5;
     this.filter.connect(this.dry);
     this.dry.connect(this.seaGain);
@@ -101,20 +80,16 @@ export class AmbientMusic {
     else param.setValueAtTime(value, now);
   }
   mix(space, submerged, duration) {
-    this.seaRate = 2 ** ((-5 * submerged) / 12);
-    if (this.sources?.sea)
-      this.ramp(this.sources.sea.playbackRate, this.seaRate, duration);
-    this.ramp(this.body.gain, submerged * 4.5, duration);
-    this.ramp(this.pitchDrift.gain, submerged * 14, duration);
+    this.ramp(this.body.gain, submerged * 1.5, duration);
     this.ramp(this.seaGain.gain, Math.cos((space * Math.PI) / 2), duration);
     this.ramp(this.spaceGain.gain, Math.sin((space * Math.PI) / 2), duration);
     this.ramp(
       this.filter.frequency,
-      2600 * (300 / 2600) ** submerged,
+      2600 * (900 / 2600) ** submerged,
       duration,
     );
-    this.ramp(this.dry.gain, 1 - submerged * 0.58, duration);
-    this.ramp(this.wet.gain, submerged * 1.1, duration);
+    this.ramp(this.dry.gain, 1 - submerged * 0.72, duration);
+    this.ramp(this.wet.gain, submerged * 0.95, duration);
   }
   setScene(page, duration = 0.6) {
     this.page = page;
@@ -231,20 +206,11 @@ export class AmbientMusic {
         const source = this.context.createBufferSource();
         source.buffer = this.buffers[id];
         source.loop = true;
-        if (id === "sea") {
-          source.playbackRate.value = this.seaRate;
-          this.pitchDrift.connect(source.detune);
-        }
+        source.playbackRate.value = 1;
         source.connect(target);
         source.start(start);
         this.sources[id] = source;
       }
-      // A slow, very small pitch drift adds a submerged wavering quality.
-      this.driftOscillator = this.context.createOscillator();
-      this.driftOscillator.type = "sine";
-      this.driftOscillator.frequency.value = 0.16;
-      this.driftOscillator.connect(this.pitchDrift);
-      this.driftOscillator.start(start);
     }
     // Previously .36: roughly 5 dB quieter before scene processing.
     this.ramp(this.master.gain, 0.2, 1.2);

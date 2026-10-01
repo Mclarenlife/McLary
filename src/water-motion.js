@@ -177,12 +177,13 @@ export class WaterMotion {
         void main() {
           vec4 lens = waterLens(vUv, resolution.x / resolution.y);
           vec2 uv = clamp(vUv + lens.xy / resolution, .001, .999);
-          vec2 split = lens.xy / resolution * .075 * lens.w;
+          vec2 split = lens.xy / resolution * .16 * lens.w;
           vec4 color = texture2D(tDiffuse, uv);
           color.r = texture2D(tDiffuse, clamp(uv + split, .001, .999)).r;
           color.b = texture2D(tDiffuse, clamp(uv - split, .001, .999)).b;
           color.rgb *= 1. + lens.z * .23;
           color.rgb += max(lens.z, 0.) * vec3(.035, .042, .045);
+          color.rgb += bubbleSpectrum(lens);
           gl_FragColor = color;
         }
       `,
@@ -223,7 +224,9 @@ export class WaterMotion {
 
   update(delta, reduced) {
     waterVeil.update(delta, reduced);
-    this.veilPass.enabled = waterVeil.uniforms.waterCover.value > 0;
+    this.veilPass.enabled =
+      waterVeil.uniforms.waterCover.value > 0 &&
+      waterVeil.uniforms.bubblePresence.value > 0;
     if (!reduced) this.time += delta;
     this.waveTime.value = this.time;
     this.screenPass.uniforms.time.value = this.time;
