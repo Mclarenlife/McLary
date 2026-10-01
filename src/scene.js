@@ -9,6 +9,7 @@ import { profile } from "./content.js";
 import gsap from "gsap";
 import { WaterMotion } from "./water-motion.js";
 import { DayCycle } from "./day-cycle.js";
+import { waterVeil } from "./water-veil.js";
 
 // Scene geometry and interaction are authored for this project. The gallery's
 // bundled geographic data is credited in public/earth.
@@ -318,6 +319,7 @@ export class PortfolioScene {
       return;
     const enteringGallery = page === "gallery" && this.page !== page;
     this.page = page;
+    waterVeil.settle(page);
     this.dragOffset = 0;
     const oceanPage = page === "index" || page === "contact";
     const target = oceanPage
@@ -372,6 +374,7 @@ export class PortfolioScene {
     this.pushTimeline?.kill();
     this.waterMotion.push.finish();
     this.transitionTarget = null;
+    waterVeil.settle(this.page);
   }
   beginTransition(direction, nextPage) {
     if (this.reduced) return;
@@ -380,9 +383,11 @@ export class PortfolioScene {
       this.waterMotion.composer,
       this.waterMotion.outputPass,
       direction,
+      this.waterMotion.veilPass,
     );
     this.transitionTarget = nextPage;
     this.setPage(nextPage, true);
+    waterVeil.cross(direction);
     this.pushTimeline = gsap
       .timeline({ onComplete: () => this.cancelTransition() })
       .to(this.waterMotion.push, {

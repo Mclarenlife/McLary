@@ -48,7 +48,7 @@ export class AmbientMusic {
     this.reverb = ctx.createConvolver();
     const impulse = ctx.createBuffer(
       2,
-      Math.round(ctx.sampleRate * 1.8),
+      Math.round(ctx.sampleRate * 3.4),
       ctx.sampleRate,
     );
     let seed = 93;
@@ -58,15 +58,25 @@ export class AmbientMusic {
       for (let i = 0; i < samples.length; i++) {
         seed = (seed * 1664525 + 1013904223) >>> 0;
         low += ((seed / 4294967296) * 2 - 1 - low) * 0.13;
+        const t = i / ctx.sampleRate;
+        // Diffuse late energy: a slower bloom separates it from the dry note.
         samples[i] =
-          low * Math.exp((-i / ctx.sampleRate) * 4) * (1 - i / samples.length);
+          low *
+          (1 - Math.exp(-t / 0.08)) *
+          Math.exp(-t * 1.45) *
+          (1 - i / samples.length);
       }
     }
     this.reverb.buffer = impulse;
+    this.reverbTone = ctx.createBiquadFilter();
+    this.reverbTone.type = "lowpass";
+    this.reverbTone.frequency.value = 780;
+    this.reverbTone.Q.value = 0.5;
     this.filter.connect(this.dry);
     this.dry.connect(this.seaGain);
     this.filter.connect(this.reverb);
-    this.reverb.connect(this.wet);
+    this.reverb.connect(this.reverbTone);
+    this.reverbTone.connect(this.wet);
     this.wet.connect(this.seaGain);
     this.effects = new Set();
     this.enabled = false;
@@ -89,11 +99,11 @@ export class AmbientMusic {
     this.ramp(this.spaceGain.gain, Math.sin((space * Math.PI) / 2), duration);
     this.ramp(
       this.filter.frequency,
-      2600 * (700 / 2600) ** submerged,
+      2600 * (380 / 2600) ** submerged,
       duration,
     );
-    this.ramp(this.dry.gain, 1 - submerged * 0.15, duration);
-    this.ramp(this.wet.gain, submerged * 0.48, duration);
+    this.ramp(this.dry.gain, 1 - submerged * 0.58, duration);
+    this.ramp(this.wet.gain, submerged * 1.1, duration);
   }
   setScene(page, duration = 0.6) {
     this.page = page;

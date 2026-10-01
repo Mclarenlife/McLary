@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import gsap from "gsap";
+import { waterVeil, waterVeilGLSL } from "./water-veil.js";
 import {
   clamp,
   damp,
@@ -34,6 +35,8 @@ const fragmentShader = /* glsl */ `
   uniform float dispersion;
   uniform vec2 viewport;
   uniform vec2 maskEdges;
+  uniform float waterAspect;
+  ${waterVeilGLSL}
   varying vec2 sheet;
   varying vec3 viewPosition;
   vec4 sampleAtlas(vec2 uv, vec2 dx, vec2 dy) {
@@ -88,6 +91,12 @@ const fragmentShader = /* glsl */ `
     split += (dx * optical.x + dy * optical.y) * fringe * viewport.y;
     vec2 blur = (dx * (optical.x + .28) + dy * (optical.y + .45))
       * edge * (2.1 + dispersion) * breathing * viewport.y * mix(.22, 1., photo);
+    vec2 screenUv = gl_FragCoord.xy / (viewport.x * viewport.y * vec2(waterAspect, 1.));
+    vec3 lens = waterLens(screenUv, waterAspect);
+    // Photos share the background's moving water focus; captions stay readable.
+    float legibility = mix(.12, .72, photo);
+    uv += (dx * lens.x + dy * lens.y) * viewport.y * legibility;
+    blur += (dx * .72 + dy * .69) * lens.z * viewport.y * legibility;
     // One continuous sampling path: blur smoothly reaches zero in the center.
     // A threshold here used to outline the optical field as a moving rectangle.
     vec4 soft = softened(uv, blur, dx, dy);
@@ -165,6 +174,8 @@ export class GalleryMotion {
         time: { value: 0 },
         dispersion: { value: 0.32 },
         viewport: { value: new THREE.Vector2(1, 1) },
+        waterAspect: { value: 1 },
+        ...waterVeil.uniforms,
         maskEdges: { value: new THREE.Vector2(235, 315) },
         range: { value: new THREE.Vector2(-2600, 1200) },
       },
@@ -694,6 +705,7 @@ export class GalleryMotion {
     this.geometry.computeBoundingSphere();
     this.material.uniforms.offset.value = this.current;
     this.material.uniforms.time.value = this.time;
+    this.material.uniforms.waterAspect.value = this.width / this.height;
     this.material.uniforms.dispersion.value =
       (this.mobile ? 0.22 : 0.32) + Math.min(Math.abs(this.speed) / 7000, 0.18);
     this.renderer.render(this.scene, this.camera);

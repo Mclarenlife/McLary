@@ -145,7 +145,7 @@ assert.equal(
 );
 assert(player.sources.sea.loop && player.sources.space.loop);
 assert(
-  Math.abs(player.filter.frequency.target - 700) < 1e-8,
+  Math.abs(player.filter.frequency.target - 380) < 1e-8,
   "A route change while loading is preserved",
 );
 assert.equal(
@@ -153,10 +153,25 @@ assert.equal(
   0.2,
   "Master is quieter than the previous .36",
 );
-assert(player.wet.gain.target > 0);
+assert(
+  player.wet.gain.target > player.dry.gain.target * 2,
+  "Underwater mix favors the diffuse tail over direct notes",
+);
+const impulseSamples = player.reverb.buffer.getChannelData(0);
+let earlyEnergy = 0,
+  lateEnergy = 0;
+impulseSamples.forEach((sample, i) => {
+  if (i > player.context.sampleRate * 0.5) lateEnergy += sample * sample;
+  else earlyEnergy += sample * sample;
+});
+assert(
+  lateEnergy / (earlyEnergy + lateEnergy) > 0.15,
+  "Audible late reverb lasts beyond the note attack",
+);
 assert(
   player.filter.connections.includes(player.reverb) &&
-    player.reverb.connections.includes(player.wet),
+    player.reverb.connections.includes(player.reverbTone) &&
+    player.reverbTone.connections.includes(player.wet),
   "Filtered music feeds real convolution reverb",
 );
 player.transitionWater("work", "contact");

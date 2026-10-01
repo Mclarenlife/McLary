@@ -5,6 +5,7 @@ import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ScenePush } from "./scene-push.js";
 import { waveFieldGLSL } from "./wave-spectrum.js";
+import { waterVeil, waterVeilGLSL } from "./water-veil.js";
 
 const RIPPLE_COUNT = 10;
 
@@ -161,6 +162,34 @@ export class WaterMotion {
     this.composer.addPass(this.screenPass);
     this.push = new ScenePush(renderer);
     this.composer.addPass(this.push.pass);
+    this.veilPass = new ShaderPass({
+      uniforms: {
+        tDiffuse: { value: null },
+        resolution: { value: new THREE.Vector2(innerWidth, innerHeight) },
+        ...waterVeil.uniforms,
+      },
+      vertexShader: this.screenPass.material.vertexShader,
+      fragmentShader: /* glsl */ `
+        uniform sampler2D tDiffuse;
+        uniform vec2 resolution;
+        varying vec2 vUv;
+        ${waterVeilGLSL}
+        void main() {
+          vec3 lens = waterLens(vUv, resolution.x / resolution.y);
+          vec2 uv = clamp(vUv + lens.xy / resolution, .001, .999);
+          vec2 blur = vec2(lens.z) / resolution;
+          vec4 color = texture2D(tDiffuse, uv) * .28;
+          color += texture2D(tDiffuse, clamp(uv + vec2(blur.x, blur.y), .001, .999)) * .18;
+          color += texture2D(tDiffuse, clamp(uv - vec2(blur.x, blur.y), .001, .999)) * .18;
+          color += texture2D(tDiffuse, clamp(uv + vec2(-blur.x, blur.y), .001, .999)) * .18;
+          color += texture2D(tDiffuse, clamp(uv + vec2(blur.x, -blur.y), .001, .999)) * .18;
+          gl_FragColor = color;
+        }
+      `,
+    });
+    // ShaderPass clones descriptors; rebind the live state shared with the paper.
+    Object.assign(this.veilPass.uniforms, waterVeil.uniforms);
+    this.composer.addPass(this.veilPass);
     this.outputPass = new OutputPass();
     this.composer.addPass(this.outputPass);
     this.camera = camera;
@@ -193,6 +222,8 @@ export class WaterMotion {
   }
 
   update(delta, reduced) {
+    waterVeil.update(delta, reduced);
+    this.veilPass.enabled = waterVeil.uniforms.waterCover.value > 0;
     if (!reduced) this.time += delta;
     this.waveTime.value = this.time;
     this.screenPass.uniforms.time.value = this.time;
@@ -202,6 +233,7 @@ export class WaterMotion {
   resize(width, height) {
     this.composer.setSize(width, height);
     this.screenPass.uniforms.aspect.value = width / height;
+    this.veilPass.uniforms.resolution.value.set(width, height);
   }
 
   render() {
