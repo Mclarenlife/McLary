@@ -549,7 +549,8 @@ export class GalleryMotion {
     const columns = this.mobile ? 1 : 2;
     const gap = this.mobile ? 0 : 30;
     const cardWidth = (this.sheetWidth - gap) / columns;
-    const imageHeight = cardWidth / 1.52;
+    // Match the website covers so navigation and headlines stay in frame.
+    const imageHeight = cardWidth / 2;
     this.rowPitch = imageHeight + 108;
     this.contentHeight = Math.ceil(this.cards.length / columns) * this.rowPitch;
     this.maxTravel = Math.max(0, this.contentHeight - this.rowPitch);

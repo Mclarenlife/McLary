@@ -11,72 +11,72 @@ export const profile = {
   socials: [], // Example: { label: 'Instagram', url: 'https://instagram.com/yourname' }
 };
 
-// Original, procedurally rendered concept studies. Replace with real work as ready.
+// Fictional website concepts with generated cover art. Replace with real work as ready.
 export const projects = [
   {
     id: "quiet-spaces",
     title: "Quiet spaces",
     category: "Digital",
     year: "01",
-    color: "#c7dfe2",
+    color: "#e8e2d7",
     art: "portal",
-    subtitle: "Space, light & interaction",
+    subtitle: "Architecture studio website",
     description:
-      "An architectural exploration of light and stillness. A soft blue portal frames a space that changes with your point of view.",
+      "A website concept for an architecture practice. Warm stone, generous typography and an editorial grid bring light and stillness into the digital experience.",
   },
   {
     id: "liquid-thoughts",
-    title: "Liquid thoughts",
+    title: "Signal",
     category: "Motion",
     year: "02",
-    color: "#dccbdc",
+    color: "#171b15",
     art: "ribbon",
-    subtitle: "Material & motion study",
+    subtitle: "Independent music platform",
     description:
-      "A study in fluid form: a continuous ribbon of reflected light, shifting between sculpture and movement.",
+      "A music platform concept combining acid-green typography, chrome textures and an integrated radio player. A visual identity built around independent sound.",
   },
   {
     id: "soft-structure",
-    title: "Soft structure",
+    title: "Soft Form",
     category: "Design",
     year: "03",
-    color: "#e4c3ac",
+    color: "#a14d35",
     art: "sphere",
-    subtitle: "Colour, form & balance",
+    subtitle: "Furniture & lifestyle store",
     description:
-      "Simple forms in a carefully balanced composition. Soft colour and tactile surfaces turn a familiar shape into something new.",
+      "An ecommerce concept for contemporary furniture. Tactile product imagery, terracotta tones and relaxed typography make room for everyday objects.",
   },
   {
     id: "another-orbit",
-    title: "Another orbit",
+    title: "Orbital",
     category: "Motion",
     year: "04",
-    color: "#b7c2d8",
+    color: "#08203c",
     art: "orbit",
-    subtitle: "An experiment in rhythm",
+    subtitle: "Space technology website",
     description:
-      "An exploration of repetition and orbit. Floating rings trace a quiet rhythm around a central form.",
+      "A space technology website concept pairing a cinematic Earth horizon with precise mission details. An exploration of scale, discovery and scientific storytelling.",
   },
   {
     id: "in-bloom",
     title: "In bloom",
     category: "Design",
     year: "05",
-    color: "#c8d0ba",
+    color: "#ece0ad",
     art: "bloom",
-    subtitle: "Organic form exploration",
+    subtitle: "Botanical fragrance boutique",
     description:
-      "A sculptural study of growth and symmetry. Rounded petals unfold into an abstract botanical form.",
+      "A botanical fragrance boutique concept. Sunlit glass, forest-green lettering and soft yellow tones turn a product collection into a sensory editorial experience.",
   },
   {
     id: "between-worlds",
-    title: "Between worlds",
+    title: "Elsewhere",
     category: "Digital",
     year: "06",
-    color: "#d6b9ad",
+    color: "#f1eee5",
     art: "stairs",
-    subtitle: "An impossible landscape",
+    subtitle: "Travel & culture magazine",
     description:
-      "Stairs, openings and a suspended sphere form a small landscape with no fixed destination. An invitation to keep exploring.",
+      "An independent travel magazine concept with a bold masthead, expansive photography and an expressive editorial layout. Stories for taking the slower route.",
   },
-].map((project) => ({ image: `/studies/${project.id}.webp`, ...project }));
+].map((project) => ({ image: `/covers/${project.id}.webp`, ...project }));

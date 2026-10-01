@@ -396,7 +396,7 @@ function renderCards() {
     template.innerHTML = projects
       .map(
         (p) =>
-          `<button class="project-card" data-project="${p.id}" aria-label="View ${p.title}"><div class="project-cover" style="--project-color:${p.color}">${p.image ? `<img src="${p.image}" alt="${p.title} — original 3D concept study"/>` : ""}</div><div class="project-info"><div><h2>${p.title}</h2><p>${p.subtitle}</p></div><span aria-hidden="true">${arrowUp}</span></div></button>`,
+          `<button class="project-card" data-project="${p.id}" aria-label="View ${p.title}"><div class="project-cover" style="--project-color:${p.color}">${p.image ? `<img src="${p.image}" alt="${p.title} — ${p.subtitle}"/>` : ""}</div><div class="project-info"><div><h2>${p.title}</h2><p>${p.subtitle}</p></div><span aria-hidden="true">${arrowUp}</span></div></button>`,
       )
       .join("");
     template.content.querySelectorAll("[data-project]").forEach((card) => {

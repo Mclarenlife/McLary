@@ -874,7 +874,7 @@ body.work-view header {
   cursor: grabbing;
 }
 .project-cover {
-  aspect-ratio: 1.52;
+  aspect-ratio: 2;
   overflow: hidden;
   background: var(--project-color);
   position: relative;
