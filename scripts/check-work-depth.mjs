@@ -25,9 +25,20 @@ const seabed=new SeabedScene(new DayCycle("noon"),{value:0});
 assert(!seabed.group.visible);
 seabed.setDepth(1); assert(seabed.group.visible);
 seabed.setDepth(0); assert(!seabed.group.visible);
-for (const mesh of seabed.group.children) {
+let drawCalls = 0;
+seabed.group.traverse((mesh) => {
+  if (!mesh.isMesh) return;
+  drawCalls++;
   assert(Array.from(mesh.geometry.attributes.position.array).every(Number.isFinite));
   if(mesh instanceof THREE.InstancedMesh) assert(Array.from(mesh.instanceMatrix.array).every(Number.isFinite));
-}
-assert(seabed.group.children.length <= 5,"Instanced landscape keeps draw calls bounded");
+});
+assert(drawCalls <= 9,"Batched wreck and instanced landscape keep draw calls bounded");
+assert.equal(seabed.wreck.children.length,4,"Wreck batches its timbers, metal, rigging and canvas");
+const wreckBounds = new THREE.Box3().setFromObject(seabed.wreck);
+assert(wreckBounds.max.z < -30,"Wreck stays in the middle distance");
+assert(wreckBounds.max.y > -14,"Broken masts make a recognisable tall silhouette");
+seabed.resize(390);
+assert(seabed.wreck.scale.x < .75,"Phone view keeps the full ship silhouette in frame");
+seabed.resize(1280);
+assert.equal(seabed.wreck.scale.x,1);
 console.log("Work descent passed: finite travel, all rows readable, reversible continuous depth, camera clearance and bounded geometry.");

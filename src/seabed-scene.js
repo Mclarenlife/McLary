@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { createShipwreck } from "./shipwreck.js";
 
 // One continuous, low-frequency landscape; no tiled bitmap or screen grain.
 export function sandHeight(x, z) {
@@ -28,6 +29,9 @@ const vertex = /* glsl */ `
       surfaceNormal = normalize(mat3(modelMatrix) * normal);
     #endif
     tint = vec3(1.);
+    #ifdef USE_COLOR
+      tint *= color;
+    #endif
     #ifdef USE_INSTANCING_COLOR
       tint = instanceColor;
     #endif
@@ -43,6 +47,7 @@ const fragment = /* glsl */ `
   uniform float night;
   uniform float sand;
   uniform float reveal;
+  uniform float wood;
   uniform vec3 baseColor;
   varying vec3 world;
   varying vec3 surfaceNormal;
@@ -55,6 +60,8 @@ const fragment = /* glsl */ `
     float ripplePhase = world.z * 4.1 + sin(world.x * .6 + world.z * .15) * 1.7;
     float ripple = sin(ripplePhase);
     float detail = mix(1., .93 + .07 * ripple, sand);
+    float grain = sin(world.y * 27. + sin(world.x * .63 + world.z * .28) * 2.);
+    detail *= 1. - wood * (.07 + .05 * grain);
     vec2 q = world.xz * .46;
     q += vec2(sin(q.y * .7 + time * .3), cos(q.x * .6 - time * .24)) * .5;
     float field = sin(q.x * 2.1 + q.y + time * .25) + sin(q.y * 2.7 - q.x * .7 - time * .32);
@@ -76,11 +83,11 @@ export class SeabedScene {
     this.group.visible = false;
     this.reveal = { value: 0 };
     this.materials = [];
-    const material = (color, sand = 0, sway = 0) => {
+    const material = (color, sand = 0, sway = 0, wood = 0) => {
       const m = new THREE.ShaderMaterial({ vertexShader: vertex, fragmentShader: fragment,
         side: THREE.DoubleSide, transparent: true, uniforms: { time, reveal: this.reveal, daylight: day.uniforms.daylight,
           night: day.uniforms.night, baseColor: {value:new THREE.Color(color)},
-          sand: {value:sand}, sway: {value:sway} } });
+          sand: {value:sand}, sway: {value:sway}, wood: {value:wood} } });
       this.materials.push(m);
       return m;
     };
@@ -174,6 +181,15 @@ export class SeabedScene {
       pose.scale.setScalar(h); pose.updateMatrix(); this.coral.setMatrixAt(i, pose.matrix);
     }
     this.group.add(this.coral);
+    this.wreck = createShipwreck(material);
+    this.wreck.position.set(0, sandHeight(0,-42) - .55, -42);
+    this.wreck.rotation.set(.13,-.23,-.035);
+    this.group.add(this.wreck);
+    this.resize();
+  }
+  resize(width = typeof innerWidth === "number" ? innerWidth : 1280) {
+    // Keep the complete silhouette in the mobile view's much narrower frustum.
+    this.wreck.scale.setScalar(THREE.MathUtils.clamp(width / 540, .60, 1));
   }
   setDepth(depth) {
     this.group.visible = depth > .015;

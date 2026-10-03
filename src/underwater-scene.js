@@ -230,6 +230,7 @@ export class UnderwaterScene {
   }
   resize() {
     this.backdrop.material.uniforms.aspect.value = innerWidth / innerHeight;
+    this.seabed.resize(innerWidth);
     this.bubbles.resize();
   }
   setActive(active) {
