@@ -3,6 +3,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { SeaVisitors } from "./sea-visitors.js";
 import { underwaterLight } from "./underwater-light.js";
 import { DayCycle } from "./day-cycle.js";
+import { SeabedScene } from "./seabed-scene.js";
 
 const backgroundVertex = /* glsl */ `
   varying vec2 vUv;
@@ -145,6 +146,9 @@ export class UnderwaterScene {
     this.group = new THREE.Group();
     this.group.visible = false;
     this.time = { value: 0 };
+    this.depth = { value: 0 };
+    this.seabed = new SeabedScene(day, this.time);
+    this.group.add(this.seabed.group);
     this.bubbles = new BubbleTrail();
     this.backdrop = new THREE.Mesh(
       new THREE.PlaneGeometry(2, 2),
@@ -159,6 +163,7 @@ export class UnderwaterScene {
           strength: day.uniforms.strength,
           night: day.uniforms.night,
           time: this.time,
+          descent: this.depth,
           aspect: { value: innerWidth / innerHeight },
           pointer: { value: new THREE.Vector2() },
         },
@@ -230,6 +235,10 @@ export class UnderwaterScene {
   setActive(active) {
     this.group.visible = active;
     this.bubbles.setActive(false);
+  }
+  setDepth(value) {
+    this.depth.value = THREE.MathUtils.clamp(value, 0, 1);
+    this.seabed.setDepth(this.depth.value);
   }
   update(time, delta, pointer) {
     this.visitors.update(delta);

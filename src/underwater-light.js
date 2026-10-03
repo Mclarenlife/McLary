@@ -10,6 +10,7 @@ export const underwaterLight = /* glsl */ `
   uniform vec3 direction;
   uniform float strength;
   uniform float night;
+  uniform float descent;
   varying vec2 vUv;
   float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
   float noise(vec2 p){
@@ -25,6 +26,7 @@ export const underwaterLight = /* glsl */ `
   }
   void main(){
     vec2 uv=vUv+pointer*.006;
+    uv.y -= descent * .75;
     float depth=max(0.,1.-uv.y);
     vec2 q=vec2((uv.x-.5)*aspect,depth);
     vec3 color=mix(deep,shallow,exp(-depth*2.8));
@@ -57,6 +59,8 @@ export const underwaterLight = /* glsl */ `
     float glow=step(.976,seed)*exp(-dot(f,f)*110.)*pow(.5+.5*sin(time*.65+seed*90.),3.);
     color+=vec3(.035,.36,.38)*glow*night*smoothstep(.02,.45,depth);
     color*=1.-.19*pow(abs(uv.x-.5)*2.,2.);
+    vec3 abyss = mix(vec3(.012,.095,.115), vec3(.004,.017,.035), night);
+    color = mix(color, abyss * (.7 + vUv.y * .3), descent * .82);
     gl_FragColor=vec4(color,1.);
   }
 `;

@@ -35,6 +35,10 @@ The build includes McLary’s Files at `/files/` and B&W 文件工具箱 at `/bw
 
 The two editable cover designs are in `public/covers/` as SVG files, with WebP exports used by the animated portfolio cards.
 
+Project clicks play the existing soft selection sound when audio is enabled and open their site in a new tab with `noopener,noreferrer`. The portfolio remains open at its current position.
+
+WORK continues into a finite seabed descent after the last project row. Scrolling lowers the camera and turns its view toward a procedurally modelled sand floor, eroded rocks, swaying seagrass and branching coral. Surface light attenuates with depth; the seabed follows the chosen time of day. Scroll upward to reverse the journey. Returning to WORK resets the list and depth. Terrain shaders compile during the welcome preload. Reduced-motion mode uses the native scroll area with the same depth mapping. Run `node scripts/check-work-depth.mjs` for travel bounds, smooth reversal, camera clearance and geometry checks.
+
 ## Make it your own
 
 Edit **`src/content.js`** to change the introduction, biography, contact email and project data. The portfolio currently links to FILES and B&W. Set `profile.email` to print your email onto the animated sail and enable the matching accessible email link and copy button. An unset address shows an explicit coming-soon message; no email is invented.

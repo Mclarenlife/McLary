@@ -788,6 +788,10 @@ body.work-view header {
   overflow: clip;
   pointer-events: none;
 }
+.seabed-travel { height: max(1350px, 185vh); pointer-events: none; }
+.sheet-ready .seabed-travel { display: none; }
+body.work-view.seabed-view header { color: #eaf9f5; }
+body.work-view.seabed-view .nav > a { color: #eaf9f5; }
 .sheet-ready .project-grid {
   position: fixed;
   width: 1px;

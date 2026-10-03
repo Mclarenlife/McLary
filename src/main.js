@@ -416,6 +416,7 @@ function renderCards() {
       openProject,
       galleryEntry,
       updateGalleryProgress,
+      (depth) => scene?.setWorkDepth(depth),
     );
 }
 function updateGalleryProgress(value, label) {
@@ -431,8 +432,10 @@ function updateGalleryProgress(value, label) {
 function openProject(id) {
   const p = projects.find((p) => p.id === id);
   if (!p) return;
+  audio?.playUI("select");
   if (p.url) {
-    window.location.assign(p.url);
+    // Keep this synchronous in the trusted click to avoid popup blocking.
+    window.open(p.url, "_blank", "noopener,noreferrer");
     return;
   }
   const d = document.querySelector(".dialog");
