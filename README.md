@@ -29,11 +29,17 @@ Run `pnpm build`, `pnpm check`, `node scripts/check-ocean.mjs`, and `node script
 
 The site uses root-relative URLs for the account site (`mclarenlife.github.io`), not a `/McLary/` project subdirectory. The home boat uses a world scale of 0.68, with the contact camera adjusted proportionally to preserve the close-up.
 
+### Portfolio sub-sites
+
+The build includes McLary’s Files at `/files/` and B&W 文件工具箱 at `/bw/`. Local sources live beside this workspace in `../sites/FILES-site` and `../sites/B&W`; the GitHub source archive includes them under `sites/` for independent builds. Override their locations with `FILES_SITE_ROOT` and `BW_SITE_ROOT` if needed. `scripts/build-subsites.mjs` builds FILES with its URL prefix and copies B&W’s static HTML, CSS, JavaScript and assets. B&W retains its existing Google Fonts and jsDelivr dependencies.
+
+The two editable cover designs are in `public/covers/` as SVG files, with WebP exports used by the animated portfolio cards.
+
 ## Make it your own
 
-Edit **`src/content.js`** to change the introduction, biography, contact email and project data. The six current entries are explicitly labeled concept studies, not claims about real clients or completed commissions. Set `profile.email` to print your email onto the animated sail and enable the matching accessible email link and copy button. An unset address shows an explicit coming-soon message; no email is invented.
+Edit **`src/content.js`** to change the introduction, biography, contact email and project data. The portfolio currently links to FILES and B&W. Set `profile.email` to print your email onto the animated sail and enable the matching accessible email link and copy button. An unset address shows an explicit coming-soon message; no email is invented.
 
-For each real project, replace its title, category, subtitle, description and image. Put your files in `public/projects/` and set `image: '/projects/your-image.webp'`. Image paths you specify are preserved by the data mapping. Projects open in an accessible native dialog.
+For each real project, set its title, category, subtitle, description and image. Put your files in `public/projects/` and set `image: '/projects/your-image.webp'`. Image paths you specify are preserved by the data mapping. Set `url` to navigate directly to a published project; entries without a URL open in an accessible native dialog.
 
 For photography, edit `src/photography.js`. The requested initial state contains three empty frames for 广东, 澳门 and 山西, labeled only by location. Set an image path and title/credit for each entry when your own photographs are available; images retain their original proportions. No stock photographs are published.
 

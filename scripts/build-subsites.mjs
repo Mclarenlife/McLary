@@ -19,3 +19,18 @@ const destination = path.join(root, "build/files");
 await mkdir(destination, { recursive: true });
 await cp(path.join(source, "dist"), destination, { recursive: true });
 console.log("FILES-site included at /files/.");
+
+const bwCandidates = [
+  process.env.BW_SITE_ROOT,
+  path.resolve(root, "../sites/B&W"),
+  path.join(root, "sites/B&W"),
+].filter(Boolean);
+const bwSource = bwCandidates.find((dir) => existsSync(path.join(dir, "index.html")));
+if (!bwSource) throw new Error("B&W source missing. Set BW_SITE_ROOT to its directory.");
+const bwDestination = path.join(root, "build/bw");
+await mkdir(bwDestination, { recursive: true });
+// This standalone site uses relative URLs, which also work under the Pages subpath.
+for (const entry of ["index.html", "assets", "css", "js"]) {
+  await cp(path.join(bwSource, entry), path.join(bwDestination, entry), { recursive: true });
+}
+console.log("B&W included at /bw/.");

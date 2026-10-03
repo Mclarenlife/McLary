@@ -24,4 +24,15 @@ export const projects = [
     subtitle: "Interactive learning archive",
     description: "A personal archive of photography, color, racing and flight. Fifteen tactile folders turn curiosity into an interactive reading experience.",
   },
+  {
+    id: "bw-toolbox",
+    title: "B&W — 文件工具箱",
+    category: "Digital",
+    year: "2026",
+    color: "#efeee9",
+    image: "/covers/bw-toolbox.webp",
+    url: "/bw/",
+    subtitle: "A playful browser-based toolkit",
+    description: "Fourteen local file tools, one expressive workspace. Fluid typography and a changing color palette bring image editing, conversion and PDF tools together in the browser.",
+  },
 ];
