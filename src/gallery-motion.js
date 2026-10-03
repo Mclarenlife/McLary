@@ -576,7 +576,7 @@ export class GalleryMotion {
     this.mobile = this.width <= 700;
     this.sheetWidth = Math.min(
       this.width - (this.mobile ? 44 : this.width * 0.16),
-      1190,
+      this.cards.length === 1 ? Math.min(860, Math.max(420, (this.height - 480) * 2)) : 1190,
     );
     this.start = this.mobile ? 258 : 330;
     this.horizon = this.mobile ? 188 : 238;
@@ -616,8 +616,8 @@ export class GalleryMotion {
   }
 
   buildAtlas() {
-    const columns = this.mobile ? 1 : 2;
-    const gap = this.mobile ? 0 : 30;
+    const columns = this.mobile || this.cards.length === 1 ? 1 : 2;
+    const gap = columns === 1 ? 0 : 30;
     const cardWidth = (this.sheetWidth - gap) / columns;
     // Match the website covers so navigation and headlines stay in frame.
     const imageHeight = cardWidth / 2;

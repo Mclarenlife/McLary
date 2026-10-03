@@ -359,7 +359,7 @@ function prepareWork() {
   galleryParking.append(workSurface);
   const main = workSurface;
   activeFilter = "All";
-  main.innerHTML = `<div class="work-backdrop"></div><div class="work-mask" aria-hidden="true"></div><div class="work-head"><div class="work-heading"><h1 class="page-title">Selected work</h1><div class="filters" aria-label="Filter projects">${["All", "Design", "Digital", "Motion"].map((f) => `<button data-filter="${f}" aria-pressed="${f === activeFilter}">${f}<sup>${projects.filter((p) => f === "All" || p.category === f).length}</sup></button>`).join("")}</div></div></div><div class="work-stage"><div class="project-grid"></div><p class="sample-note" style="text-align:center">A collection of concept studies</p></div>`;
+  main.innerHTML = `<div class="work-backdrop"></div><div class="work-mask" aria-hidden="true"></div><div class="work-head"><div class="work-heading"><h1 class="page-title">Selected work</h1><div class="filters" aria-label="Filter projects">${["All", ...new Set(projects.map((project) => project.category))].map((f) => `<button data-filter="${f}" aria-pressed="${f === activeFilter}">${f}<sup>${projects.filter((p) => f === "All" || p.category === f).length}</sup></button>`).join("")}</div></div></div><div class="work-stage"><div class="project-grid"></div></div>`;
   main.querySelectorAll("[data-filter]").forEach(
     (b) =>
       (b.onclick = () => {
@@ -429,8 +429,13 @@ function updateGalleryProgress(value, label) {
     `${value === 1 && !experienceReady ? "Preparing your sea" : label} · ${percent}%`;
 }
 function openProject(id) {
-  const p = projects.find((p) => p.id === id),
-    d = document.querySelector(".dialog");
+  const p = projects.find((p) => p.id === id);
+  if (!p) return;
+  if (p.url) {
+    window.location.assign(p.url);
+    return;
+  }
+  const d = document.querySelector(".dialog");
   d.innerHTML = `<button class="dialog-close" aria-label="Close project">×</button>${p.image ? `<img src="${p.image}" alt="${p.title}"/>` : ""}<div class="dialog-content"><p class="eyebrow">${p.category.toUpperCase()} · CONCEPT STUDY ${p.year}</p><h2 id="detail-title">${p.title}</h2><p>${p.description}</p></div>`;
   d.querySelector("button").onclick = () => d.close();
   d.showModal();

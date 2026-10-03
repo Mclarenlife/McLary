@@ -1312,3 +1312,6 @@ body.work-view header {
     scroll-behavior: auto !important;
   }
 }
+
+/* A single published project uses a centered feature card in the DOM fallback. */
+.project-grid:has(> .project-card:only-child) { grid-template-columns: 1fr; max-width: 860px; margin-inline: auto; }
