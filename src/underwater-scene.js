@@ -223,6 +223,10 @@ export class UnderwaterScene {
     this.fish.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.fish.frustumCulled = false;
     this.group.add(this.fish);
+    this.bottomFish = new THREE.InstancedMesh(geometry, material, count);
+    this.bottomFish.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.bottomFish.frustumCulled = false;
+    this.seabed.group.add(this.bottomFish);
     this.visitors = new SeaVisitors(day);
     this.group.add(this.visitors.group);
     this.transform = new THREE.Object3D();
@@ -265,8 +269,17 @@ export class UnderwaterScene {
       this.transform.scale.setScalar(0.22 + seed * 0.13);
       this.transform.updateMatrix();
       this.fish.setMatrixAt(i, this.transform.matrix);
+      this.transform.position.set(
+        (((i*3.17+time*(.7+school*.16))%76)-38)*direction,
+        -8-school*4-seed*2+Math.sin(time*.5+i)*.28,
+        -25-school*13-seed*9,
+      );
+      this.transform.scale.setScalar(.20+seed*.20);
+      this.transform.updateMatrix();
+      this.bottomFish.setMatrixAt(i,this.transform.matrix);
     }
     this.fish.instanceMatrix.needsUpdate = true;
+    this.bottomFish.instanceMatrix.needsUpdate = true;
     this.bubbles.update(delta);
   }
 }

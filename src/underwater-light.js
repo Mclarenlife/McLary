@@ -59,8 +59,11 @@ export const underwaterLight = /* glsl */ `
     float glow=step(.976,seed)*exp(-dot(f,f)*110.)*pow(.5+.5*sin(time*.65+seed*90.),3.);
     color+=vec3(.035,.36,.38)*glow*night*smoothstep(.02,.45,depth);
     color*=1.-.19*pow(abs(uv.x-.5)*2.,2.);
-    vec3 abyss = mix(vec3(.012,.095,.115), vec3(.004,.017,.035), night);
-    color = mix(color, abyss * (.7 + vUv.y * .3), descent * .82);
+    vec3 abyss = mix(vec3(.012,.115,.16), vec3(.004,.017,.035), night);
+    vec3 deepScene = abyss * (.55 + vUv.y * .85);
+    float opening=exp(-pow((vUv.x-.58)*2.8,2.))*pow(vUv.y,3.);
+    deepScene+=beam*opening*.12*strength;
+    color = mix(color, deepScene, descent * .86);
     gl_FragColor=vec4(color,1.);
   }
 `;

@@ -16,5 +16,5 @@ export function workDepth(travel, listEnd, descent) {
 export function submergedView(view, depth) {
   const d = clamp01(depth);
   return { ...view, y: view.y - d * 23.7, z: view.z - d * 7,
-    ty: view.ty - d * 28.2, tz: view.tz - d * 5 };
+    ty: view.ty - d * 22, tz: view.tz - d * 5 };
 }

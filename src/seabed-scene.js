@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createShipwreck } from "./shipwreck.js";
+import { createSeabedRuins, createSeabedShafts } from "./seabed-ruins.js";
 
 const mound = (x, z, cx, cz, sx, sz) => Math.exp(-(((x-cx)/sx)**2 + ((z-cz)/sz)**2));
 // Sculpted banks frame a winding sandy channel and a level resting place for the wreck.
@@ -86,7 +87,7 @@ const fragment = /* glsl */ `
   void main() {
     vec3 n = normalize(surfaceNormal);
     if (!gl_FrontFacing) n = -n;
-    float lighting = .35 + .65 * max(0., dot(n, normalize(vec3(-.4, 1., .3))));
+    float lighting = .19 + .81 * max(0., dot(n, normalize(vec3(.35, 1., .25))));
     float ripplePhase = world.z * 6.1 + sin(world.x * .34 + world.z * .15) * 2.7;
     float ripple = sin(ripplePhase) * exp(-fwidth(ripplePhase)*.8);
     float sediment = .96 + .035*sin(world.x*.35+world.z*.18);
@@ -97,8 +98,9 @@ const fragment = /* glsl */ `
     vec3 color = baseColor * tint * detail * lighting * (.22 + daylight * .78);
     color += vec3(.30, .52, .43) * caustic * (.018 + daylight * .14) * max(.1, n.y);
     color += vec3(.012, .045, .05) * night;
-    vec3 haze = mix(vec3(.012, .095, .115), vec3(.004, .017, .035), night);
-    float fog = 1. - exp(-max(0., distanceToEye - 7.) * .032);
+    vec3 haze = mix(vec3(.012, .115, .16), vec3(.004, .017, .035), night);
+    float fog = 1. - exp(-max(0., distanceToEye - 10.) * .021);
+    color *= .76 + .24*smoothstep(-26.,-16.,world.y);
     color = mix(color, haze, fog);
     gl_FragColor = vec4(color, reveal);
     // The shared scene OutputPass applies tone mapping and display conversion.
@@ -217,11 +219,15 @@ export class SeabedScene {
     this.wreck.position.set(0, sandHeight(0,-42) - .55, -42);
     this.wreck.rotation.set(.13,-.23,-.035);
     this.group.add(this.wreck);
+    this.ruins = createSeabedRuins(material, sandHeight);
+    this.group.add(this.ruins, createSeabedShafts(day, time, this.reveal));
     this.resize();
   }
   resize(width = typeof innerWidth === "number" ? innerWidth : 1280) {
     // Keep the complete silhouette in the mobile view's much narrower frustum.
-    this.wreck.scale.setScalar(THREE.MathUtils.clamp(width / 540, .60, 1));
+    this.wreck.scale.setScalar(1.22 * THREE.MathUtils.clamp(width / 660, .50, 1));
+    // Bring the flanking architecture into portrait view, retaining its height.
+    this.ruins.scale.x = THREE.MathUtils.clamp(width / 780, .52, 1);
   }
   setDepth(depth) {
     this.group.visible = depth > .015;

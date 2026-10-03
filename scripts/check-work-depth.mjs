@@ -20,7 +20,7 @@ const view={x:0,y:6.2,z:20,tx:0,ty:6,tz:-9};
 assert.deepEqual(submergedView(view,0),view,"Returning to list restores exact initial view");
 const bottom=submergedView(view,1);
 assert(bottom.y > sandHeight(bottom.x,bottom.z)+4,"Camera remains safely above the terrain");
-assert(bottom.ty < bottom.y,"Seabed camera looks down into the landscape");
+assert(bottom.ty > bottom.y,"Seabed camera looks slightly upward through the monumental ruins");
 for(let x=-6;x<=6;x+=1) for(let z=13;z<=17;z+=1)
   assert(bottom.y-2.7 > sandHeight(x,z)+3,"Pointer movement and mobile camera retain terrain clearance");
 const heights=[];
@@ -41,13 +41,16 @@ seabed.group.traverse((mesh) => {
   assert(Array.from(mesh.geometry.attributes.position.array).every(Number.isFinite));
   if(mesh instanceof THREE.InstancedMesh) assert(Array.from(mesh.instanceMatrix.array).every(Number.isFinite));
 });
-assert(drawCalls <= 9,"Batched wreck and instanced landscape keep draw calls bounded");
+assert(drawCalls <= 12,"Detailed ruins, shafts and wreck remain batched within twelve draws");
+assert.equal(seabed.ruins.children.length,3,"Stone, reefs and coral each share a single draw");
+const ruinsBounds = new THREE.Box3().setFromObject(seabed.ruins);
+assert(ruinsBounds.min.z < -90 && ruinsBounds.max.y > 10,"Ruins extend into the distance and tower above the wreck");
 assert.equal(seabed.wreck.children.length,4,"Wreck batches its timbers, metal, rigging and canvas");
 const wreckBounds = new THREE.Box3().setFromObject(seabed.wreck);
-assert(wreckBounds.max.z < -30,"Wreck stays in the middle distance");
+assert(wreckBounds.max.z < -26,"Enlarged wreck remains over forty units from the camera");
 assert(wreckBounds.max.y > -14,"Broken masts make a recognisable tall silhouette");
 seabed.resize(390);
 assert(seabed.wreck.scale.x < .75,"Phone view keeps the full ship silhouette in frame");
 seabed.resize(1280);
-assert.equal(seabed.wreck.scale.x,1);
+assert.equal(seabed.wreck.scale.x,1.22);
 console.log("Work descent passed: finite travel, all rows readable, reversible continuous depth, camera clearance and bounded geometry.");
