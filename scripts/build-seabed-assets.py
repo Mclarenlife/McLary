@@ -43,12 +43,16 @@ def surface(name,color,kind):
         algae=np.clip((n-.51)*4,0,.55)*(1-xx*.5)
         rgb=rgb*(1-algae[:,:,None])+np.array([.15,.22,.14])*algae[:,:,None]
     elif kind=='stone':
-        pits=np.maximum(0,.42-noise(size,size,977))
-        relief=n*.23-pits*.8
-        value=.58+n*.65-pits*.55
+        # Quiet mineral grain: erosion belongs in the silhouette, not large,
+        # high-contrast stains repeated over every piece of masonry.
+        rng=np.random.default_rng(977)
+        grain=rng.random((size,size)).astype(np.float32)
+        pits=np.maximum(0,grain-.965)*.18
+        relief=n*.025+(grain-.5)*.0015-pits
+        value=.88+n*.16+(grain-.5)*.018
         rgb=value[:,:,None]*np.array(color)
-        algae=np.clip((noise(size,size,989)-.55)*3,0,.55)
-        rgb=rgb*(1-algae[:,:,None])+np.array([.16,.25,.21])*algae[:,:,None]
+        algae=np.clip((noise(size,size,989)-.66)*1.4,0,.12)
+        rgb=rgb*(1-algae[:,:,None])+np.array([.30,.35,.29])*algae[:,:,None]
     else:
         weave=(np.sin(xx*1800)+np.sin(yy*1800))*.01
         relief=n*.06+weave;rgb=(.62+n*.55)[:,:,None]*np.array(color)
@@ -85,6 +89,21 @@ class Batch:
     def __init__(self):self.data={}
     def add(self,kind,verts,faces,uv=None):
         d=self.data.setdefault(kind,[[],[],[]]);start=len(d[0]);d[0].extend(verts)
+        # Stable fractional offsets and rotation per stone, with world-unit
+        # texel density. A full 0..1 square on every face stretched the same
+        # stain onto blocks of completely different sizes.
+        if kind=='stone' and uv is None:
+            center=np.mean(verts,axis=0); phase=float(np.dot(center,[7.31,3.17,11.93]))
+            angle=math.sin(phase)*math.pi; ca,sa=math.cos(angle),math.sin(angle)
+            scale=.19+.045*math.sin(phase*1.37);uv=[]
+            for f in faces:
+                normal=(Vector(verts[f[1]])-Vector(verts[f[0]])).cross(Vector(verts[f[2]])-Vector(verts[f[0]]))
+                axes=[k for k in range(3) if k!=max(range(3),key=lambda k:abs(normal[k]))]
+                coords=[]
+                for j in f:
+                    a,b=verts[j][axes[0]]*scale,verts[j][axes[1]]*scale
+                    coords.append((a*ca-b*sa+math.sin(phase)*8.7,a*sa+b*ca+math.cos(phase)*6.3))
+                uv.append(coords)
         for i,f in enumerate(faces):
             d[1].append(tuple(start+j for j in f))
             d[2].append(uv[i] if uv else [(verts[j][0]*.3,verts[j][2]*.3+verts[j][1]*.3) for j in f])
@@ -94,7 +113,7 @@ class Batch:
             px,pz=px*math.cos(ry)+pz*math.sin(ry),-px*math.sin(ry)+pz*math.cos(ry)
             vs.append((x+px*math.cos(rz)-py*math.sin(rz),y+px*math.sin(rz)+py*math.cos(rz),z+pz))
         fs=[(0,3,2,1),(4,5,6,7),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7)]
-        self.add(kind,vs,fs,[[(0,0),(1,0),(1,1),(0,1)]]*6)
+        self.add(kind,vs,fs,None if kind=='stone' else [[(0,0),(1,0),(1,1),(0,1)]]*6)
     def beam(self,a,b,r,kind='timber',r2=None,sides=10):
         r=float(r); r2=float(r2) if r2 is not None else r
         a=Vector(a);b=Vector(b);direction=(b-a).normalized();u=direction.cross(Vector((0,0,1)))
@@ -106,6 +125,9 @@ class Batch:
         for i in range(sides):
             j=(i+1)%sides;faces.append((i,j,j+sides,i+sides));uv.append([(0,i/sides),(0,(i+1)/sides),(1,(i+1)/sides),(1,i/sides)])
         faces.extend([tuple(reversed(range(sides))),tuple(range(sides,2*sides))]);uv.extend([[(vs[j][0],vs[j][1]) for j in f] for f in faces[-2:]])
+        if kind=='stone':
+            phase=float(a.x*3.17+a.y*7.39+a.z*1.73)
+            uv=[[(u*(b-a).length*.22+math.sin(phase)*4.3,v*2*math.pi*r*.22+math.cos(phase)*6.7) for u,v in coords] for coords in uv]
         self.add(kind,vs,faces,uv)
     def cable(self,a,b,sag=.2,r=.025,kind='rope',steps=12):
         a=Vector(a);b=Vector(b)
@@ -274,48 +296,116 @@ def sand(x,z):
 
 ruin=Batch()
 def stonebox(x,z,h,size,rz=0):ruin.box((x,-z,h),size,'stone',rz)
-def column(x,z,h,r,lean):
- y=sand(x,z)-.2
- for dy,w,t in [(.3,3.15,.6),(.75,2.8,.3),(1.0,2.45,.22)]:stonebox(x,z,y+dy,(r*w,r*w,t))
- drums=math.ceil(h/1.8)
- for d in range(drums):
-  lo=1.12+d*h/drums;hi=1.12+(d+1)*h/drums-.035
-  vs=[];sides=64
-  for zz in [lo,hi]:
-   radius=r*(1-.17*(zz/h))
-   for j in range(sides):
-    a=j*math.pi*2/sides; rr=radius*(1-.035*(.5+.5*math.cos(a*16)))
-    rr-=max(0,math.sin(a*5+d*1.7)-.75)*.12
-    vs.append((x-lean*zz+rr*math.cos(a),-z+rr*math.sin(a),y+zz))
-  fs=[(j,(j+1)%sides,(j+1)%sides+sides,j+sides) for j in range(sides)]+[tuple(reversed(range(sides))),tuple(range(sides,sides*2))]
-  ruin.add('stone',vs,fs)
- for dy,rad,t in [(h+1.2,1.06,.2),(h+1.45,1.22,.3),(h+1.7,1.32,.2)]:
-  ruin.beam((x-lean*h,-z,y+dy),(x-lean*h,-z,y+dy+t),r*rad,'stone',sides=40)
- stonebox(x-lean*h,z,y+h+2.15,(r*2.85,r*2.85,.38))
- # Egg-and-dart ring and capital scrolls are geometry, not painted bands.
- for j in range(20):
-  a=j*math.pi/10;px=x-lean*h+r*1.17*math.cos(a);py=-z+r*1.17*math.sin(a)
-  ruin.beam((px,py,y+h+1.35),(px,py,y+h+1.7),.075,'stone',r2=.04,sides=8)
- for side in [-1,1]:
-  for j in range(25):
-   a=j*.22;b=(j+1)*.22;ra=.30*(1-j/34);rb=.30*(1-(j+1)/34)
-   ruin.beam((x-lean*h+side*r*.9+ra*math.cos(a),-z-r*1.15,y+h+1.75+ra*math.sin(a)),
-     (x-lean*h+side*r*.9+rb*math.cos(b),-z-r*1.15,y+h+1.75+rb*math.sin(b)),.05,'stone',sides=6)
+column_designs=[]
 
-for args in [(-11,-7,21,1.65,.055),(12,-13,13,1.5,-.09),(-19,-28,25,1.5,-.025),(20,-32,28,1.65,.02),
- (-28,-55,32,1.85,.04),(8,-80,37,2,.02),(-15,-87,30,1.6,-.06),(34,-77,35,2.1,.035),(-39,-98,40,2.3,.03)]:column(*args)
+def column(x,z,h,r,lean,style,seed):
+ """Individual ruins: irregular fracture rings, lost wedges, shifted courses.
+ Heights and UV offsets are authored independently for every column.
+ """
+ rng=random.Random(seed);y=sand(x,z)-.2;phase=rng.uniform(0,math.tau)
+ flutes=rng.choice([0,12,16,20,24]);drums=math.ceil(h/rng.uniform(1.7,2.6))
+ broken=style not in ['scroll-remnant','plain-capital','split-capital']
+ tilt=rng.uniform(-.055,.055);fracture=rng.uniform(.65,1.2)*r
+ column_designs.append(dict(seed=seed,style=style,height=h,flutes=flutes,drums=drums,x=x,z=z))
+ # Missing corners and offset foundation courses; no identical square stacks.
+ for k,(dy,w,t) in enumerate([(.27,3.1,.54),(.69,2.65,.27),(.95,2.3,.22)]):
+  for side in [-1,1]:
+   size=r*w/2;shift=rng.uniform(-.09,.09)
+   ruin.box((x+side*size*.5+shift,-z+shift,y+dy),(size-.035,r*w-rng.uniform(0,.22),t),'stone',rz=rng.uniform(-.055,.055))
+ # Unequal course heights and angular alignment keep the stacked masonry real.
+ weights=[rng.uniform(.78,1.24) for _ in range(drums)];bounds=[1.12]
+ for weight in weights:bounds.append(bounds[-1]+h*weight/sum(weights))
+ uoff,voff=rng.random()*7,rng.random()*9;texscale=rng.uniform(.18,.24)
+ fracture_steps=[rng.uniform(-.3,.3) for _ in range(9)]
+ sides=64
+ for d in range(drums):
+  lo=bounds[d];hi=bounds[d+1]-.027;last=d==drums-1
+  rotation=phase+rng.uniform(-.08,.08);vs=[];uvs=[];fs=[]
+  stagger=(.22*r if style in ['slipped-drums','split-capital'] and d>drums*.64 else 0)
+  for level in range(4):
+   t=level/3;zz=lo+(hi-lo)*t
+   for j in range(sides):
+    a=j*math.tau/sides;az=a+rotation
+    radius=r*(1-.15*zz/(h+1.12))
+    flute=.043*(.5+.5*math.cos(a*flutes)) if flutes else .012*math.sin(a*7+zz)
+    radius*=1-flute+.013*math.sin(a*9+phase+zz*.7)
+    # One weathered scar per shaft, tapered in height, not repeated each drum.
+    scar=max(0,math.cos(az-phase*.6)-.69)/.31
+    scar*=math.exp(-((zz/h-.72)/.20)**2)
+    radius-=r*scar*(.36 if style in ['hollow-shell','split-capital','diagonal-scar'] else .13)
+    top=0
+    if last and broken:
+     segment=(j/sides*9);step=int(segment);blend=segment-step
+     chipped=fracture_steps[step]*(1-blend)+fracture_steps[(step+1)%9]*blend
+     top=fracture*(.72*math.sin(az+phase)+chipped)
+     if style=='hollow-shell':top+=r*.6*math.cos(az*2+phase)
+     if style=='stepped-break':top+=r*.35*(1 if math.sin(az+phase)>.25 else -1)
+     top*=t*t
+    vs.append((x-lean*zz+stagger+radius*math.cos(az),-z+tilt*zz+radius*math.sin(az),y+zz+top))
+  # Explicit cylindrical UVs follow stone circumference and true height.
+  # Fractional per-drum offsets prevent repeated vertical stain stripes.
+  for level in range(3):
+   for j in range(sides):
+    jj=(j+1)%sides;f=(level*sides+j,level*sides+jj,(level+1)*sides+jj,(level+1)*sides+j);fs.append(f)
+    coords=[]
+    for index,u in zip(f,[j,j+1,j+1,j]):coords.append((u/sides*math.tau*r*texscale+uoff+d*.371,(vs[index][2]-y)*texscale+voff+d*.619))
+    uvs.append(coords)
+  fs.append(tuple(reversed(range(sides))));uvs.append([(vs[j][0]*texscale+uoff,vs[j][1]*texscale+voff) for j in fs[-1]])
+  # Triangulated, recessed fracture core. It remains solid at oblique angles.
+  center=len(vs);rim=vs[-sides:]
+  vs.append((sum(p[0] for p in rim)/sides,sum(p[1] for p in rim)/sides,sum(p[2] for p in rim)/sides-(.22*r if broken and last else 0)))
+  for j in range(sides):
+   f=(3*sides+j,3*sides+(j+1)%sides,center);fs.append(f)
+   uvs.append([(vs[k][0]*texscale+uoff,vs[k][1]*texscale+voff) for k in f])
+  ruin.add('stone',vs,fs,uvs)
+ if not broken:
+  cx=x-lean*(h+1.12)+(r*.22 if style=='split-capital' else 0);cy=-z+tilt*(h+1.12)
+  # Fragmented collar sectors leave real gaps, distinct from painted damage.
+  missing={'scroll-remnant':{2,3,4},'plain-capital':{6},'split-capital':{0,1,2,7}}[style]
+  for k in range(8):
+   if k in missing:continue
+   a=k*math.tau/8+phase
+   ruin.box((cx+math.cos(a)*r*.81,cy+math.sin(a)*r*.81,y+h+1.40),(r*.78,r*.82,.46),'stone',rz=a)
+  for side in [-1,1]:
+   if side==1 and style=='split-capital':continue
+   ruin.box((cx+side*r*.65,cy,y+h+1.88),(r*1.28,r*2.55,.35),'stone',rz=phase*.035+side*.035,ry=side*.025)
+  if style=='scroll-remnant':
+   for j in range(23):
+    a=j*.24;b=(j+1)*.24;ra=.36*(1-j/32);rb=.36*(1-(j+1)/32)
+    ruin.beam((cx-r*.85+ra*math.cos(a),cy-r*1.1,y+h+1.64+ra*math.sin(a)),(cx-r*.85+rb*math.cos(b),cy-r*1.1,y+h+1.64+rb*math.sin(b)),.065,'stone',sides=6)
+ # Displaced fragments sit outside the sightline to the wreck.
+ if seed%3!=0:
+  fx=x+(-1 if x<0 else 1)*r*2.3;fz=z+rng.uniform(-2.5,2.5);fy=sand(fx,fz)
+  direction=Vector((math.cos(phase),math.sin(phase),rng.uniform(-.12,.12)))
+  a=Vector((fx,-fz,fy+r*.65));b=a+direction*r*rng.uniform(1.5,2.6)
+  ruin.beam(a,b,r*.65,'stone',r2=r*.53,sides=20)
+  for j in range(3):
+   px=fx+rng.uniform(-2,2);pz=fz+rng.uniform(-2,2)
+   ruin.box((px,-pz,sand(px,pz)+.2),(rng.uniform(.4,1.1),rng.uniform(.3,.9),rng.uniform(.25,.6)),'stone',rz=rng.random()*math.tau,ry=rng.uniform(-.4,.4))
+
+landmarks=[
+ (-11,-7,9.4,1.65,.055,'diagonal-scar',101),
+ (12,-13,7.8,1.5,-.09,'hollow-shell',202),
+ (-19,-28,25,1.5,-.025,'scroll-remnant',303),
+ (20,-32,20.5,1.65,.14,'stepped-break',404),
+ (-28,-55,27,1.85,.065,'slipped-drums',505),
+ (8,-80,37,2,.02,'plain-capital',606),
+ (-15,-87,20,1.6,-.11,'diagonal-scar',707),
+ (34,-77,35,2.1,.035,'split-capital',808),
+ (-39,-98,40,2.3,.03,'jagged-crown',909)]
+for args in landmarks:column(*args)
 tx,tz=27,-58;base=sand(tx,tz)
 for i in range(5):
  for j in range(10):stonebox(tx+(j-4.5)*(2-i*.065),tz+i*.42,base+i*.55,(1.97-i*.065,14-i*.5,.53))
-for x in [20,27,34]:
- for z in [-62,-54]:column(x,z,18,1.45,.018)
+for k,(x,z,h,style) in enumerate([(20,-62,18,'plain-capital'),(20,-54,11.2,'stepped-break'),(27,-62,18,'scroll-remnant'),(27,-54,14.6,'hollow-shell'),(34,-62,18,'split-capital'),(34,-54,17.4,'diagonal-scar')]):
+ column(x,z,h,1.45,.018+k*.004,style,1101+k*113)
 for i in range(4):
  for j in range(8):stonebox(tx+(j-3.5)*2.6,tz,base+21.5+i*.4,(2.57,14+i*.3,.36))
 for row in range(5):
  for j in range(9-row*2):stonebox(tx+(j-(8-row*2)/2)*2.3,tz+7,base+23+row*.7,(2.27,1.3,.67),random.uniform(-.01,.01))
 for j in range(34):stonebox(17+j*.60,tz+7.2,base+22.3,(.28,.4,.32))
 ax,az=-29,-49;ay=sand(ax,az)
-for dx in [-5,5]:column(ax+dx,az,12,1.25,.02)
+for k,dx in enumerate([-5,5]):column(ax+dx,az,12 if k==0 else 10.8,1.25,.02,'plain-capital' if k==0 else 'jagged-crown',2101+k*137)
 for j in range(16):
  if j in [4,5,6]:continue
  a=j/15*math.pi;ruin.box((ax+5*math.cos(a),-az,ay+14+5*math.sin(a)),(1.05,2.6,1.75),'stone',ry=math.pi/2-a)
@@ -331,7 +421,7 @@ def export(objects,filename):
  bpy.ops.export_scene.gltf(filepath=str(OUT/filename),export_format='GLB',use_selection=True,export_apply=True,export_image_format='AUTO',export_texcoords=True,export_normals=True,export_tangents=False,export_materials='EXPORT',export_cameras=False,export_lights=False,export_draco_mesh_compression_enable=True,export_draco_mesh_compression_level=6)
  return sum(len(o.data.polygons) for o in objects)
 
-stats={'shipFaces':export(ship_objects,'shipwreck-detail.glb'),'ruinFaces':export(ruin_objects,'ruins-detail.glb')}
+stats={'shipFaces':export(ship_objects,'shipwreck-detail.glb'),'ruinFaces':export(ruin_objects,'ruins-detail.glb'),'columns':column_designs}
 # Save the editable Blender asset scene, separated into collections.
 for name,objects in [('GALLEON — detailed wreck',ship_objects),('RUINS — carved limestone',ruin_objects)]:
  collection=bpy.data.collections.new(name);bpy.context.scene.collection.children.link(collection)

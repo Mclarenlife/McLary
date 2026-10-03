@@ -1,4 +1,159 @@
 {
   "shipFaces": 117484,
-  "ruinFaces": 109324
+  "ruinFaces": 91820,
+  "columns": [
+    {
+      "seed": 101,
+      "style": "diagonal-scar",
+      "height": 9.4,
+      "flutes": 12,
+      "drums": 4,
+      "x": -11,
+      "z": -7
+    },
+    {
+      "seed": 202,
+      "style": "hollow-shell",
+      "height": 7.8,
+      "flutes": 20,
+      "drums": 4,
+      "x": 12,
+      "z": -13
+    },
+    {
+      "seed": 303,
+      "style": "scroll-remnant",
+      "height": 25,
+      "flutes": 12,
+      "drums": 15,
+      "x": -19,
+      "z": -28
+    },
+    {
+      "seed": 404,
+      "style": "stepped-break",
+      "height": 20.5,
+      "flutes": 20,
+      "drums": 9,
+      "x": 20,
+      "z": -32
+    },
+    {
+      "seed": 505,
+      "style": "slipped-drums",
+      "height": 27,
+      "flutes": 16,
+      "drums": 14,
+      "x": -28,
+      "z": -55
+    },
+    {
+      "seed": 606,
+      "style": "plain-capital",
+      "height": 37,
+      "flutes": 0,
+      "drums": 19,
+      "x": 8,
+      "z": -80
+    },
+    {
+      "seed": 707,
+      "style": "diagonal-scar",
+      "height": 20,
+      "flutes": 16,
+      "drums": 10,
+      "x": -15,
+      "z": -87
+    },
+    {
+      "seed": 808,
+      "style": "split-capital",
+      "height": 35,
+      "flutes": 16,
+      "drums": 15,
+      "x": 34,
+      "z": -77
+    },
+    {
+      "seed": 909,
+      "style": "jagged-crown",
+      "height": 40,
+      "flutes": 20,
+      "drums": 18,
+      "x": -39,
+      "z": -98
+    },
+    {
+      "seed": 1101,
+      "style": "plain-capital",
+      "height": 18,
+      "flutes": 20,
+      "drums": 9,
+      "x": 20,
+      "z": -62
+    },
+    {
+      "seed": 1214,
+      "style": "stepped-break",
+      "height": 11.2,
+      "flutes": 0,
+      "drums": 7,
+      "x": 20,
+      "z": -54
+    },
+    {
+      "seed": 1327,
+      "style": "scroll-remnant",
+      "height": 18,
+      "flutes": 24,
+      "drums": 7,
+      "x": 27,
+      "z": -62
+    },
+    {
+      "seed": 1440,
+      "style": "hollow-shell",
+      "height": 14.6,
+      "flutes": 24,
+      "drums": 6,
+      "x": 27,
+      "z": -54
+    },
+    {
+      "seed": 1553,
+      "style": "split-capital",
+      "height": 18,
+      "flutes": 24,
+      "drums": 11,
+      "x": 34,
+      "z": -62
+    },
+    {
+      "seed": 1666,
+      "style": "diagonal-scar",
+      "height": 17.4,
+      "flutes": 24,
+      "drums": 10,
+      "x": 34,
+      "z": -54
+    },
+    {
+      "seed": 2101,
+      "style": "plain-capital",
+      "height": 12,
+      "flutes": 16,
+      "drums": 6,
+      "x": -34,
+      "z": -49
+    },
+    {
+      "seed": 2238,
+      "style": "jagged-crown",
+      "height": 10.8,
+      "flutes": 12,
+      "drums": 5,
+      "x": -24,
+      "z": -49
+    }
+  ]
 }

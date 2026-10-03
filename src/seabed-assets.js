@@ -8,7 +8,8 @@ export async function loadSeabedAssets(day, time, reveal, renderer) {
   const loader=new GLTFLoader().setDRACOLoader(draco);
   try {
     const models=await Promise.all(["shipwreck-detail","ruins-detail"].map(async name => {
-      const {scene}=await loader.loadAsync(`/models/${name}.glb`);
+      const version=name==="ruins-detail"?"?v=individual-fractures-2":"";
+      const {scene}=await loader.loadAsync(`/models/${name}.glb${version}`);
       scene.traverse(mesh=>{
         if(!mesh.isMesh) return;
         const material=mesh.material;
