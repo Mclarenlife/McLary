@@ -33,9 +33,9 @@ export function createSeabedRuins(material, height) {
     for(let i=0;i<p.count;i++) {
       const angle=Math.atan2(p.getZ(i),p.getX(i));
       const course=(p.getY(i)+h*.5)/2.4;
-      const seam=Math.exp(-Math.pow(Math.sin(course*Math.PI)*15,2))*.035;
-      const scar=Math.max(0,Math.sin(angle*4+p.getY(i)*.9)*Math.cos(p.getY(i)*1.7-angle*2)-.52)*.18;
-      const wear=1-.042*(.5+.5*Math.cos(angle*16))-.025*Math.sin(p.getY(i)*3+angle*5)-seam-scar;
+      const seam=Math.exp(-Math.pow(Math.sin(course*Math.PI)*15,2))*.010;
+      const scar=Math.max(0,Math.sin(angle*4+p.getY(i)*.9)*Math.cos(p.getY(i)*1.7-angle*2)-.52)*.035;
+      const wear=1-.042*(.5+.5*Math.cos(angle*16))-.006*Math.sin(p.getY(i)*3+angle*5)-seam-scar;
       p.setX(i,p.getX(i)*wear); p.setZ(i,p.getZ(i)*wear);
       if(p.getY(i)>h*.49) p.setY(i,p.getY(i)-rand()*.45);
     }
