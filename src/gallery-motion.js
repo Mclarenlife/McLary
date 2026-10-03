@@ -477,14 +477,31 @@ export class GalleryMotion {
     }
   }
 
-  leaveForRoute(done) {
+  leaveForRoute(done, { onAscent } = {}) {
     this.cancelFilter();
     this.filtering = true;
     this.stage.setAttribute("aria-busy", "true");
     this.filterFlight.value = this.current;
-    this.filterTimeline = gsap
-      .timeline({ onComplete: done })
-      .to(this.filterFlight, {
+    this.filterTimeline = gsap.timeline({ onComplete: done });
+    if (this.depth > .001) {
+      // Return the actual scroll/camera together before the orbital transition
+      // takes its surface snapshot. Ordinary list exits keep depth frozen.
+      this.filterTimeline.call(() => onAscent?.());
+      this.filterTimeline.to(this.filterFlight, {
+        value: 0,
+        duration: 1.7 + this.depth * 1.1,
+        ease: "power2.inOut",
+        onUpdate: () => {
+          this.current = this.target = this.filterFlight.value;
+          this.applyDepth(workDepth(this.current, this.listEnd, this.descentTravel));
+        },
+        onComplete: () => {
+          this.current = this.target = this.speed = 0;
+          this.applyDepth(0);
+        },
+      });
+    }
+    this.filterTimeline.to(this.filterFlight, {
         value: this.contentHeight + this.start - this.minimum + 16,
         duration: 1.25,
         ease: "power2.in",

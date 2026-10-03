@@ -186,7 +186,9 @@ function navigate(path) {
         navigation.timeScale(0.2);
     };
     if (page() === "work" && galleryMotion?.ready)
-      navigation = galleryMotion.leaveForRoute(beginFlight);
+      navigation = galleryMotion.leaveForRoute(beginFlight, {
+        onAscent: () => waterVeil.burst(),
+      });
     else beginFlight();
     return;
   }
