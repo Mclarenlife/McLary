@@ -265,6 +265,7 @@ export class PortfolioScene {
     await Promise.all([
       this.ocean.prepare(this.renderer),
       this.underwater.visitors.prepare(),
+      this.underwater.seabed.prepare(this.renderer),
       this.photoGallery.prepare(this.renderer),
     ]);
     const visible = this.ocean.group.visible;

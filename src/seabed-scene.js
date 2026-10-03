@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createShipwreck } from "./shipwreck.js";
 import { createSeabedRuins, createSeabedShafts } from "./seabed-ruins.js";
+import { loadSeabedAssets } from "./seabed-assets.js";
 
 const mound = (x, z, cx, cz, sx, sz) => Math.exp(-(((x-cx)/sx)**2 + ((z-cz)/sz)**2));
 // Sculpted banks frame a winding sandy channel and a level resting place for the wreck.
@@ -109,6 +110,8 @@ const fragment = /* glsl */ `
 
 export class SeabedScene {
   constructor(day, time) {
+    this.day=day;
+    this.time=time;
     this.group = new THREE.Group();
     this.group.visible = false;
     this.reveal = { value: 0 };
@@ -222,6 +225,28 @@ export class SeabedScene {
     this.ruins = createSeabedRuins(material, sandHeight);
     this.group.add(this.ruins, createSeabedShafts(day, time, this.reveal));
     this.resize();
+  }
+  async prepare(renderer) {
+    try {
+      const models=await loadSeabedAssets(this.day,this.time,this.reveal,renderer);
+      const oldWreck=this.wreck;
+      this.wreck=models.wreck;
+      this.wreck.position.copy(oldWreck.position);
+      this.wreck.rotation.copy(oldWreck.rotation);
+      this.group.remove(oldWreck);
+      this.group.add(this.wreck);
+      const oldStone=this.ruins.getObjectByName("ruin-stone");
+      this.ruins.remove(oldStone);
+      this.ruins.add(models.ruins);
+      for(const root of [oldWreck,oldStone]) root.traverse(mesh=>{
+        if(mesh.isMesh) {mesh.geometry.dispose();mesh.material.dispose();}
+      });
+      this.resize();
+      this.group.userData.assetQuality="blender";
+    } catch(error) {
+      console.warn("Detailed seabed assets could not load; retaining the complete fallback scene.",error);
+      this.group.userData.assetQuality="fallback";
+    }
   }
   resize(width = typeof innerWidth === "number" ? innerWidth : 1280) {
     // Keep the complete silhouette in the mobile view's much narrower frustum.

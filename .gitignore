@@ -3,3 +3,5 @@ artifacts/
 node_modules/
 build/
 *.log
+design/seabed/*.blend1
+design/seabed/*.png
