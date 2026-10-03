@@ -2,11 +2,18 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createShipwreck } from "./shipwreck.js";
 
-// One continuous, low-frequency landscape; no tiled bitmap or screen grain.
+const mound = (x, z, cx, cz, sx, sz) => Math.exp(-(((x-cx)/sx)**2 + ((z-cz)/sz)**2));
+// Sculpted banks frame a winding sandy channel and a level resting place for the wreck.
 export function sandHeight(x, z) {
-  return -25 + Math.sin(x * .12 + z * .045) * .65
-    + Math.cos(z * .10 - x * .035) * .85
-    + Math.sin(x * .27 + z * .16) * .12;
+  const channel = x - (2.8 * Math.sin(z*.085) + 1.2 * Math.sin(z*.19));
+  const dunes = Math.sin(z*.24 + x*.10 + Math.sin(x*.13)*1.2)*.55
+    + Math.sin(z*.48 - x*.18)*.17;
+  const banks = 3.6*mound(x,z,-15,-14,10,15) + 4.3*mound(x,z,19,-30,12,18)
+    + 2.5*mound(x,z,-25,-58,18,13) + 2.1*mound(x,z,13,5,7,11);
+  const gully = 1.5 * Math.exp(-((channel/3.9)**2));
+  const terrain = -25.5 + dunes + banks - gully;
+  const berth = Math.exp(-((x/15)**4 + ((z+42)/8)**4));
+  return THREE.MathUtils.lerp(terrain, -25.7, berth*.94);
 }
 const vertex = /* glsl */ `
   uniform float time;
@@ -53,24 +60,45 @@ const fragment = /* glsl */ `
   varying vec3 surfaceNormal;
   varying vec3 tint;
   varying float distanceToEye;
+  vec2 cellHash(vec2 p) {
+    return fract(sin(vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3))))*43758.5453);
+  }
+  float waterLight(vec2 p) {
+    // Advected, curved cellular folds instead of intersecting sinusoidal grid lines.
+    p += vec2(sin(p.y*1.31+time*.19)+sin(p.y*.57-p.x*.39-time*.13),
+      cos(p.x*1.17-time*.16)+sin(p.y*.43+p.x*.71+time*.11))*.62;
+    p += vec2(sin(p.y*3.1+p.x*.7-time*.21),cos(p.x*2.8-p.y*.6+time*.17))*.19;
+    vec2 cell=floor(p), local=fract(p);
+    float first=8., second=8.;
+    for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++) {
+      vec2 offset=vec2(float(x),float(y));
+      vec2 seed=cellHash(cell+offset);
+      vec2 site=.5+.37*sin(seed*6.2831+time*.23);
+      float d=length(offset+site-local);
+      second=min(second,max(first,d)); first=min(first,d);
+    }
+    float edge=second-first;
+    float aa=max(fwidth(edge),.009);
+    float shimmer=.5+.5*sin(p.x*1.9+p.y*.73+time*.47);
+    float fold=1.-smoothstep(.006,.035+.038*shimmer+aa,edge);
+    return fold*smoothstep(.10,.85,shimmer);
+  }
   void main() {
     vec3 n = normalize(surfaceNormal);
     if (!gl_FrontFacing) n = -n;
     float lighting = .35 + .65 * max(0., dot(n, normalize(vec3(-.4, 1., .3))));
-    float ripplePhase = world.z * 4.1 + sin(world.x * .6 + world.z * .15) * 1.7;
-    float ripple = sin(ripplePhase);
-    float detail = mix(1., .93 + .07 * ripple, sand);
+    float ripplePhase = world.z * 6.1 + sin(world.x * .34 + world.z * .15) * 2.7;
+    float ripple = sin(ripplePhase) * exp(-fwidth(ripplePhase)*.8);
+    float sediment = .96 + .035*sin(world.x*.35+world.z*.18);
+    float detail = mix(1., sediment + .028 * ripple, sand);
     float grain = sin(world.y * 27. + sin(world.x * .63 + world.z * .28) * 2.);
     detail *= 1. - wood * (.07 + .05 * grain);
-    vec2 q = world.xz * .46;
-    q += vec2(sin(q.y * .7 + time * .3), cos(q.x * .6 - time * .24)) * .5;
-    float field = sin(q.x * 2.1 + q.y + time * .25) + sin(q.y * 2.7 - q.x * .7 - time * .32);
-    float caustic = pow(max(0., 1. - abs(field) * .8), 9.);
+    float caustic = waterLight(world.xz*.49 + vec2(time*.025,-time*.018));
     vec3 color = baseColor * tint * detail * lighting * (.22 + daylight * .78);
-    color += vec3(.28, .55, .49) * caustic * (.08 + daylight * .28) * max(.1, n.y);
+    color += vec3(.30, .52, .43) * caustic * (.018 + daylight * .14) * max(.1, n.y);
     color += vec3(.012, .045, .05) * night;
     vec3 haze = mix(vec3(.012, .095, .115), vec3(.004, .017, .035), night);
-    float fog = 1. - exp(-max(0., distanceToEye - 7.) * .039);
+    float fog = 1. - exp(-max(0., distanceToEye - 7.) * .032);
     color = mix(color, haze, fog);
     gl_FragColor = vec4(color, reveal);
     // The shared scene OutputPass applies tone mapping and display conversion.
@@ -91,14 +119,14 @@ export class SeabedScene {
       this.materials.push(m);
       return m;
     };
-    const terrain = new THREE.PlaneGeometry(200, 200, 160, 160);
+    const terrain = new THREE.PlaneGeometry(200, 200, 220, 220);
     terrain.rotateX(-Math.PI / 2);
     terrain.translate(0, 0, -45);
     const positions = terrain.attributes.position;
     for (let i = 0; i < positions.count; i++)
       positions.setY(i, sandHeight(positions.getX(i), positions.getZ(i)));
     terrain.computeVertexNormals();
-    this.floor = new THREE.Mesh(terrain, material("#91b7a5", 1));
+    this.floor = new THREE.Mesh(terrain, material("#a9b9a5", 1));
     this.group.add(this.floor);
 
     // Rounded eroded stone, shared geometry with varied proportions and colour.
@@ -112,11 +140,16 @@ export class SeabedScene {
     stone.computeVertexNormals();
     const random = (() => { let s = 2811; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); })();
     const pose = new THREE.Object3D();
-    this.rocks = new THREE.InstancedMesh(stone, material("#789a92"), 64);
+    const habitats = Array.from({length:32}, () => {
+      const z=9-random()*76;
+      const x=(random()<.48?-1:1)*(5+random()*27);
+      return {x,z};
+    });
+    this.rocks = new THREE.InstancedMesh(stone, material("#789a92"), 176);
     for (let i = 0; i < this.rocks.count; i++) {
-      const side = i % 2 ? 1 : -1;
-      const x = side * (7 + random() * 29), z = 11 - random() * 66;
-      const size = .45 + random() ** 2 * 4;
+      const patch = habitats[i%habitats.length];
+      const x = patch.x+(random()-.5)*5, z = patch.z+(random()-.5)*4;
+      const size = .10 + random() ** 2 * 1.05;
       pose.position.set(x, sandHeight(x, z) - size * .22, z);
       pose.scale.set(size * 1.5, size * (.45 + random() * .55), size);
       pose.rotation.set(random() * .35, random() * 6.28, random() * .2);
@@ -137,13 +170,12 @@ export class SeabedScene {
     blade.computeVertexNormals();
     this.grass = new THREE.InstancedMesh(blade, material("#548a77", 0, .16), 720);
     for (let i = 0; i < this.grass.count; i++) {
-      const cluster = Math.floor(i / 18);
-      const side = cluster % 2 ? 1 : -1;
-      const x = side * (5.5 + (cluster * 5.713 % 25)) + (random() - .5) * 3;
-      const z = 13 - (cluster * 7.321 % 62) + (random() - .5) * 3;
+      const patch = habitats[Math.floor(i/24)%habitats.length];
+      const x = patch.x + (random() - .5) * 5;
+      const z = patch.z + (random() - .5) * 4;
       pose.position.set(x, sandHeight(x, z) - .06, z);
-      const height = .7 + random() * 2.4;
-      pose.scale.set(.7 + random(), height, 1);
+      const height = .25 + random() ** 1.5 * 1.1;
+      pose.scale.set(.4 + random()*.65, height, 1);
       pose.rotation.set(0, random() * 6.28, (random() - .5) * .2);
       pose.updateMatrix(); this.grass.setMatrixAt(i, pose.matrix);
       this.grass.setColorAt(i, new THREE.Color().setHSL(.39 + random() * .08, .35, .50 + random() * .25));
@@ -169,13 +201,13 @@ export class SeabedScene {
     }
     const stem = mergeGeometries(branches);
     branches.forEach(g => g.dispose());
-    this.coral = new THREE.InstancedMesh(stem, material("#b88b89", 0, .018), 22);
+    this.coral = new THREE.InstancedMesh(stem, material("#b88b89", 0, .018), 68);
     for (let i = 0; i < this.coral.count; i++) {
-      const cluster = i;
-      const x = (cluster % 2 ? -1 : 1) * (6 + cluster * 3.07 % 17);
-      const z = 4 - (cluster * 4.71 % 38);
+      const patch = habitats[Math.floor(i/4)%habitats.length];
+      const x = patch.x+(random()-.5)*3;
+      const z = patch.z+(random()-.5)*3;
       const angle = i * 2.399;
-      const h = .5 + random() * .9;
+      const h = .18 + random() * .40;
       pose.position.set(x, sandHeight(x, z) -.03, z);
       pose.rotation.set(0, angle, 0);
       pose.scale.setScalar(h); pose.updateMatrix(); this.coral.setMatrixAt(i, pose.matrix);

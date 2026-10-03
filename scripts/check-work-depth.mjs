@@ -21,6 +21,15 @@ assert.deepEqual(submergedView(view,0),view,"Returning to list restores exact in
 const bottom=submergedView(view,1);
 assert(bottom.y > sandHeight(bottom.x,bottom.z)+4,"Camera remains safely above the terrain");
 assert(bottom.ty < bottom.y,"Seabed camera looks down into the landscape");
+for(let x=-6;x<=6;x+=1) for(let z=13;z<=17;z+=1)
+  assert(bottom.y-2.7 > sandHeight(x,z)+3,"Pointer movement and mobile camera retain terrain clearance");
+const heights=[];
+for(let x=-35;x<=35;x+=1) for(let z=-65;z<=15;z+=1) {
+  const h=sandHeight(x,z); heights.push(h);
+  assert(Math.abs(sandHeight(x+.1,z)-h)<.15,"Terrain has smooth, continuous slopes");
+}
+assert(Math.max(...heights)-Math.min(...heights)>4,"Landscape has meaningful banks and gullies");
+assert(Math.abs(sandHeight(-8,-42)-sandHeight(8,-42))<.6,"Wreck rests on a stable sandy berth");
 const seabed=new SeabedScene(new DayCycle("noon"),{value:0});
 assert(!seabed.group.visible);
 seabed.setDepth(1); assert(seabed.group.visible);
