@@ -8,11 +8,11 @@ export const timeOptions = [
   ["night", "晚上"],
 ];
 export const timeAtHour = (hour) =>
-  hour >= 5 && hour < 10
+  hour >= 5 && hour < 11
     ? "morning"
-    : hour >= 10 && hour < 14
+    : hour >= 11 && hour < 16
       ? "noon"
-      : hour >= 14 && hour < 19
+      : hour >= 16 && hour < 19
         ? "afternoon"
         : "night";
 export const validTimeMode = (value) =>
