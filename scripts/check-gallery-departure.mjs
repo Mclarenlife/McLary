@@ -35,6 +35,7 @@ for (const destination of ["index", "work", "contact"]) {
     let swaps = 0,
       completions = 0;
     const scene = {
+      renderer: { getPixelRatio: () => 1 },
       photoGallery: globe,
       page: "gallery",
       camera: new THREE.PerspectiveCamera(),

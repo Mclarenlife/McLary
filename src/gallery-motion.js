@@ -3,10 +3,12 @@ import gsap from "gsap";
 import { waterVeil, waterVeilGLSL } from "./water-veil.js";
 import { CoverHover, coverAt, MAX_COVER_HOVERS } from "./cover-hover.js";
 import { workTravel, workDepth, smoothRange } from "./work-depth.js";
+import { profileFrame } from "./performance-probe.js";
+import { renderBudget } from "./render-budget.js";
 import {
   clamp,
   damp,
-  ribbonPoint,
+  RibbonGrid,
   atlasPosition,
   projectAt,
   galleryBend,
@@ -195,7 +197,12 @@ export class GalleryMotion {
       return;
     }
     this.renderer.setClearColor(0x000000, 0);
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
+    this.renderer.setPixelRatio(renderBudget.settings().dpr);
+    this.unsubscribeBudget = renderBudget.subscribe(({ dpr }) => {
+      if (this.renderer.getPixelRatio() === dpr) return;
+      this.renderer.setPixelRatio(dpr);
+      if (this.material) this.material.uniforms.viewport.value.y = dpr;
+    });
     this.canvas = this.renderer.domElement;
     this.canvas.className = "gallery-canvas";
     this.canvas.setAttribute("aria-hidden", "true");
@@ -204,6 +211,8 @@ export class GalleryMotion {
     this.camera = new THREE.PerspectiveCamera(40, 1, 1, 7000);
     this.camera.position.z = 1400;
     this.geometry = new THREE.PlaneGeometry(1, 1, 48, 192);
+    this.ribbonGrid = new RibbonGrid(this.geometry.attributes.uv.array, 49);
+    this.geometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
     this.material = new THREE.ShaderMaterial({
       vertexShader,
       fragmentShader,
@@ -596,6 +605,9 @@ export class GalleryMotion {
   }
 
   applyDepth(depth) {
+    if (this.depth === depth && this.depthEnabled === this.enabled && this.depthHead === this.head) return;
+    this.depthEnabled = this.enabled;
+    this.depthHead = this.head;
     this.depth = depth;
     this.onDepth(depth);
     document.body.classList.toggle("seabed-view", this.enabled && depth > .3);
@@ -675,6 +687,11 @@ export class GalleryMotion {
     this.listEnd = travel.listEnd;
     this.descentTravel = travel.descent;
     this.maxTravel = travel.max;
+    // Mobile browser chrome can resize the viewport without changing card
+    // layout. Update travel but retain the decoded/uploaded atlas in that case.
+    const atlasKey = `${this.sheetWidth}:${columns}:${this.cards.map(card => card.dataset.project).join(",")}`;
+    if (this.atlasKey === atlasKey && this.material.uniforms.atlas.value) return;
+    this.atlasKey = atlasKey;
     const ratio = Math.min(
       2,
       this.renderer.capabilities.maxTextureSize /
@@ -786,6 +803,7 @@ export class GalleryMotion {
       return;
     const blocked =
       this.grid.closest("[inert]") || document.querySelector("dialog[open]");
+    const finishProfile = profileFrame(this.renderer, this.depth > .8 ? "paper:seabed" : "paper:list");
     this.canvas.style.visibility = this.grid.closest("[inert]")
       ? "hidden"
       : "visible";
@@ -800,6 +818,16 @@ export class GalleryMotion {
     // Filter/route flights share paper travel, but must never drive the dive.
     if (!this.filtering && !blocked)
       this.applyDepth(workDepth(this.current, this.listEnd, this.descentTravel));
+    // Once the list has faded completely at depth, keep travel/route state
+    // alive but stop deforming and drawing an invisible 9,457-vertex sheet.
+    const hidden = this.material.uniforms.sheetOpacity.value <= 0;
+    if (hidden) {
+      if (!this.paperHidden) this.renderer.clear();
+      this.paperHidden = true;
+      finishProfile?.();
+      return;
+    }
+    this.paperHidden = false;
     this.pointer.x = damp(
       this.pointer.x,
       this.mobile ? 0 : this.pointerTarget.x,
@@ -818,30 +846,17 @@ export class GalleryMotion {
       -this.pointer.x * 0.009,
     );
     this.mesh.position.y = -this.entry.value * this.height * 1.12;
-    const pos = this.geometry.attributes.position,
-      uv = this.geometry.attributes.uv;
+    const pos = this.geometry.attributes.position;
     const flutter =
       (this.mobile ? 0.6 : 1) + Math.min(Math.abs(this.speed) / 3000, 0.5);
     this.bend = galleryBend(this.start, this.mobile, this.current);
-    for (let i = 0; i < pos.count; i++) {
-      const distance =
-        this.maximum + (this.minimum - this.maximum) * uv.getY(i);
-      pos.setXYZ(
-        i,
-        ...ribbonPoint(
-          (uv.getX(i) - 0.5) * this.sheetWidth,
-          distance,
-          this.bend,
-          this.radius,
-          this.horizon,
-          this.time,
-          flutter,
-          this.sheetWidth,
-        ),
-      );
-    }
+    this.ribbonGrid.update(pos.array, {
+      minimum: this.minimum, maximum: this.maximum, width: this.sheetWidth,
+      bend: this.bend, radius: this.radius, horizon: this.horizon,
+      time: this.time, flutter,
+    });
     pos.needsUpdate = true;
-    this.geometry.computeBoundingSphere();
+    this.hitBoundsDirty = true;
     this.material.uniforms.offset.value = this.current;
     this.material.uniforms.time.value = this.time;
     this.material.uniforms.waterAspect.value = this.width / this.height;
@@ -849,6 +864,7 @@ export class GalleryMotion {
       (this.mobile ? 0.22 : 0.32) + Math.min(Math.abs(this.speed) / 7000, 0.18);
     this.updateHover(dt);
     this.renderer.render(this.scene, this.camera);
+    finishProfile?.();
     if (import.meta.env.DEV) {
       this.canvas.dataset.travel = this.current.toFixed(2);
       this.canvas.dataset.maxTravel = this.maxTravel.toFixed(2);
@@ -874,6 +890,7 @@ export class GalleryMotion {
         this.mesh.updateMatrixWorld();
         this.camera.updateMatrixWorld();
         this.raycaster.setFromCamera(this.ndc, this.camera);
+        this.updateHitBounds();
         for (const hit of this.raycaster.intersectObject(this.mesh)) {
           const distance =
             this.maximum + (this.minimum - this.maximum) * hit.uv.y;
@@ -908,6 +925,7 @@ export class GalleryMotion {
       1 - (event.clientY / this.height) * 2,
     );
     this.raycaster.setFromCamera(this.ndc, this.camera);
+    this.updateHitBounds();
     for (const hit of this.raycaster.intersectObject(this.mesh)) {
       const distance = this.maximum + (this.minimum - this.maximum) * hit.uv.y;
       const y = atlasPosition(
@@ -925,9 +943,16 @@ export class GalleryMotion {
     }
   }
 
+  updateHitBounds() {
+    if (!this.hitBoundsDirty) return;
+    this.geometry.computeBoundingSphere();
+    this.hitBoundsDirty = false;
+  }
+
   destroy() {
     if (this.disposed) return;
     this.disposed = true;
+    this.unsubscribeBudget?.();
     this.cancelFilter();
     this.abort.abort();
     gsap.ticker.remove(this.tick);

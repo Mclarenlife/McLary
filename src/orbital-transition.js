@@ -104,7 +104,7 @@ export class OrbitalTransition {
     this.surfaceCamera.near = 0.1;
     this.surfaceCamera.far = 1200;
     this.surfaceCamera.updateProjectionMatrix();
-    const dpr = Math.min(devicePixelRatio, 1.5);
+    const dpr = Math.min(scene.renderer.getPixelRatio(), 1.5);
     this.target = new THREE.WebGLRenderTarget(
       Math.round(innerWidth * dpr),
       Math.round(innerHeight * dpr),

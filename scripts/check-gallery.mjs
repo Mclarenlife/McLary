@@ -158,6 +158,8 @@ for (const photo of photographs.filter((p) => p.image)) {
   assert(!photo.empty);
 }
 assert.equal(globe.decor.planets.length, 3);
+assert.equal(globe.decor.satellite.children.length, 4, "Satellite retains its four materials in four draws");
+assert.equal(globe.decor.station.children.length, 3, "Station struts/panels share three material batches");
 assert(
   globe.decor.satellite.children.length > 0 &&
     globe.decor.station.children.length > 0,

@@ -111,6 +111,14 @@ Run `node scripts/check-gallery.mjs` to check the fixed sphere, regional lens fi
 
 Run `node scripts/check-orbital.mjs` to check the offshore geographic anchor, continuous increasing altitude, desktop/mobile camera endpoints, live ocean updates, render-state restoration and interruption cleanup.
 
+## Rendering performance
+
+The Work ribbon keeps the original 48 × 192 grid and exact fold/flutter equations. `RibbonGrid` reuses row-level fold calculations and column wave phases rather than allocating a result array and recalculating trigonometry for each vertex. Raycast bounds update only when a hover/click needs them. Once the list is fully transparent at seabed depth, its renderer stops drawing while scroll/route state remains live. Height-only viewport changes reuse the cover atlas when card layout is unchanged.
+
+The main scene and paper share a responsive resolution budget: up to 1.7 DPR on desktop and 1.35 on touch/narrow displays, with total framebuffer pixel limits. Sustained frame intervals over 26 ms for four seconds lower resolution in bounded steps; loading, transitions and background-tab pauses do not trigger that adjustment. Geometry, animation timing, text layout and camera paths stay unchanged. Mobile shadow maps use 1024 instead of 2048. Expired ripple passes are skipped, solid seabed assets draw both sides in one pass, and rigid satellite/station parts are merged by material without simplifying their geometry.
+
+Run `node scripts/check-render-performance.mjs` for numerical equivalence and frame-budget checks. For local diagnostics, open `/?profile` or `/work/?profile` in the Vite dev server. Each renderer reports six-second `PERF` windows in the console and its canvas `data-performance` attribute (frame intervals, CPU submission time, draw calls, triangles and resource counts). CPU submission time is not GPU execution time. This recorder is disabled in production. Desktop viewport tests do not substitute for real iPhone/Android performance measurements.
+
 ## Accessibility and resilience
 
 Keyboard focus indicators, native modal dialogs, a keyboard-contained navigation menu, reduced-motion handling, adaptive rendering resolution and a 2D content fallback are included. In a browser without WebGL, the portfolio and local project imagery remain accessible. A graphics-capable browser is required for the 3D experience.

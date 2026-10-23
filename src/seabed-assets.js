@@ -16,6 +16,9 @@ export async function loadSeabedAssets(day, time, reveal, renderer) {
         material.fog=false;
         material.transparent=true;
         material.side=THREE.DoubleSide;
+        // These are solid wreck/stone surfaces, not layered translucent glass.
+        // Keep both faces and the reveal fade without drawing every mesh twice.
+        material.forceSinglePass=true;
         material.envMapIntensity=.25;
         material.roughness=Math.max(.82,material.roughness);
         if(material.normalMap) material.normalScale.multiplyScalar(name==="ruins-detail"?.35:.65);

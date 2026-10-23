@@ -1,4 +1,23 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+
+// The panels and hull pieces move together. Bake their local transforms and
+// merge by material, preserving every vertex while avoiding a draw per strut.
+function batchRigidParts(group) {
+  const batches = new Map();
+  const originals = [...group.children];
+  for (const mesh of originals) {
+    mesh.updateMatrix();
+    const geometry = mesh.geometry.clone().applyMatrix4(mesh.matrix);
+    if (!batches.has(mesh.material)) batches.set(mesh.material, []);
+    batches.get(mesh.material).push(geometry);
+  }
+  for (const [material, geometries] of batches) {
+    group.add(new THREE.Mesh(mergeGeometries(geometries), material));
+    geometries.forEach(geometry => geometry.dispose());
+  }
+  for (const mesh of originals) { group.remove(mesh); mesh.geometry.dispose(); }
+}
 
 const metal = (color) =>
   new THREE.MeshStandardMaterial({
@@ -136,6 +155,7 @@ export class SpaceDecor {
     dish.rotation.z = -0.4;
     this.satellite.add(dish);
     box(this.satellite, [0.012, 0.25, 0.012], [0, 0.23, 0], graphite);
+    batchRigidParts(this.satellite);
     this.satellite.scale.setScalar(0.6);
     this.group.add(this.satellite);
 
@@ -148,6 +168,7 @@ export class SpaceDecor {
       solarPanel(this.station, x, -0.34, 0.28, 0.52);
       solarPanel(this.station, x, 0.34, 0.28, 0.52);
     }
+    batchRigidParts(this.station);
     this.station.scale.setScalar(0.33);
     this.group.add(this.station);
     this.update(0, 1);

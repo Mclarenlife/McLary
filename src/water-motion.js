@@ -230,7 +230,10 @@ export class WaterMotion {
     if (!reduced) this.time += delta;
     this.waveTime.value = this.time;
     this.screenPass.uniforms.time.value = this.time;
-    this.screenPass.enabled = !reduced;
+    // No input for 2.8 seconds means every ripple is expired: this pass would
+    // just copy the full frame, including in the sea and space scenes.
+    this.screenPass.enabled = !reduced &&
+      this.screenPass.uniforms.ripples.value.some(r => r.w !== 0 && this.time - r.z <= 2.8);
   }
 
   resize(width, height) {

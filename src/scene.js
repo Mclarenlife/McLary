@@ -11,6 +11,8 @@ import { WaterMotion } from "./water-motion.js";
 import { DayCycle } from "./day-cycle.js";
 import { waterVeil } from "./water-veil.js";
 import { submergedView } from "./work-depth.js";
+import { profileFrame } from "./performance-probe.js";
+import { renderBudget } from "./render-budget.js";
 
 // Scene geometry and interaction are authored for this project. The gallery's
 // bundled geographic data is credited in public/earth.
@@ -56,7 +58,7 @@ export class PortfolioScene {
       alpha: false,
       powerPreference: "high-performance",
     });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
+    this.renderer.setPixelRatio(renderBudget.settings().dpr);
     this.renderer.setSize(innerWidth, innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -84,7 +86,7 @@ export class PortfolioScene {
     const sun = new THREE.DirectionalLight("#fff0d7", 4.3);
     sun.position.set(-9, 14, 6);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.setScalar(renderBudget.settings().shadow);
     Object.assign(sun.shadow.camera, {
       left: -17,
       right: 17,
@@ -154,6 +156,7 @@ export class PortfolioScene {
     this.scene.add(this.photoGallery.group);
     this.addParticles();
     this.resize = () => {
+      renderBudget.refresh();
       this.day.setAspect(innerWidth / innerHeight);
       this.camera.aspect = innerWidth / innerHeight;
       this.camera.updateProjectionMatrix();
@@ -164,6 +167,11 @@ export class PortfolioScene {
       if (this.page) this.setPage(this.page, true);
     };
     addEventListener("resize", this.resize);
+    renderBudget.subscribe(({ dpr }) => {
+      if (this.renderer.getPixelRatio() === dpr) return;
+      this.renderer.setPixelRatio(dpr);
+      this.waterMotion.composer.setPixelRatio(dpr);
+    });
     this.onMove = (e) => {
       this.pointer.set(
         e.clientX / innerWidth - 0.5,
@@ -458,6 +466,8 @@ export class PortfolioScene {
   }
   render() {
     if (document.hidden) return;
+    renderBudget.sample(performance.now(), !this.entered || this.orbitalActive || this.waterMotion.push.pass.enabled);
+    const finishProfile = profileFrame(this.renderer, `${this.page}:${this.workDepth > .8 ? "seabed" : this.workDepth > .05 ? "descent" : "surface"}`);
     this.clock.update();
     const delta = Math.min(this.clock.getDelta(), 0.05);
     this.timeCheck += delta;
@@ -577,5 +587,6 @@ export class PortfolioScene {
     }
     this.orbitalFlight?.renderSurface();
     this.waterMotion.render();
+    finishProfile?.();
   }
 }

@@ -26,6 +26,7 @@ export function ribbonPoint(
   flutter = 1,
   width = 1190,
   hold = radius * 1.15,
+  out = [],
 ) {
   let y = distance,
     z = 0;
@@ -75,11 +76,48 @@ export function ribbonPoint(
   const wave = Math.sin(x * 0.005 + distance * 0.0055 - time * 1.75);
   const cross = Math.sin(distance * 0.004 - x * 0.004 + time * 1.22);
   const edge = Math.min(1, Math.abs(x) / (width * 0.5));
-  return [
-    x * lateral + wave * 7 * flutter,
-    horizon - y + cross * 12 * flutter,
-    z + (wave * 30 + cross * 19) * (0.75 + edge * 0.25) * flutter,
-  ];
+  out[0] = x * lateral + wave * 7 * flutter;
+  out[1] = horizon - y + cross * 12 * flutter;
+  out[2] = z + (wave * 30 + cross * 19) * (0.75 + edge * 0.25) * flutter;
+  return out;
+}
+
+// Each row shares the same folded path. Cache the column phases and use the
+// sine addition identity: the result matches ribbonPoint without thousands of
+// temporary arrays, repeated arc calculations or trig calls on every frame.
+export class RibbonGrid {
+  constructor(uv, columns) {
+    this.columns = columns;
+    this.rows = uv.length / 2 / columns;
+    this.uv = uv;
+    this.x = new Float64Array(columns * 6);
+    this.base = new Float64Array(3);
+  }
+  update(output, { minimum, maximum, width, bend, radius, horizon, time, flutter }) {
+    if (this.width !== width) {
+      this.width = width;
+      for (let c = 0; c < this.columns; c++) {
+        const x = (this.uv[c * 2] - .5) * width, k = c * 6;
+        this.x.set([x, Math.sin(x * .005), Math.cos(x * .005),
+          Math.sin(-x * .004), Math.cos(-x * .004),
+          .75 + Math.min(1, Math.abs(x) / (width * .5)) * .25], k);
+      }
+    }
+    for (let r = 0; r < this.rows; r++) {
+      const distance = maximum + (minimum - maximum) * this.uv[r * this.columns * 2 + 1];
+      const base = ribbonPoint(1, distance, bend, radius, horizon, 0, 0, width, radius * 1.15, this.base);
+      const a = distance * .0055 - time * 1.75, b = distance * .004 + time * 1.22;
+      const sa = Math.sin(a), ca = Math.cos(a), sb = Math.sin(b), cb = Math.cos(b);
+      for (let c = 0; c < this.columns; c++) {
+        const k = c * 6, i = (r * this.columns + c) * 3;
+        const wave = this.x[k + 1] * ca + this.x[k + 2] * sa;
+        const cross = this.x[k + 3] * cb + this.x[k + 4] * sb;
+        output[i] = this.x[k] * base[0] + wave * 7 * flutter;
+        output[i + 1] = base[1] + cross * 12 * flutter;
+        output[i + 2] = base[2] + (wave * 30 + cross * 19) * this.x[k + 5] * flutter;
+      }
+    }
+  }
 }
 
 export function atlasPosition(distance, offset, top, contentHeight) {
