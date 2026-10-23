@@ -2,7 +2,7 @@ import * as THREE from "three";
 import gsap from "gsap";
 import { waterVeil, waterVeilGLSL } from "./water-veil.js";
 import { CoverHover, coverAt, MAX_COVER_HOVERS } from "./cover-hover.js";
-import { workTravel, workDepth, smoothRange } from "./work-depth.js";
+import { workScrollLimit } from "./work-scroll.js";
 import { profileFrame } from "./performance-probe.js";
 import { renderBudget } from "./render-budget.js";
 import {
@@ -42,7 +42,6 @@ const fragmentShader = /* glsl */ `
   uniform float waterAspect;
   uniform vec4 coverHover[${MAX_COVER_HOVERS}];
   uniform float columns;
-  uniform float sheetOpacity;
   ${waterVeilGLSL}
   varying vec2 sheet;
   varying vec3 viewPosition;
@@ -146,21 +145,18 @@ const fragmentShader = /* glsl */ `
     color.rgb = mix(color.rgb, vec3(.97, .98, 1.), glow * .085);
     // Fade only the paper itself at the heading; the sea/light stays continuous.
     color.a *= smoothstep(maskEdges.x, maskEdges.y, screenY);
-    color.a *= sheetOpacity;
     gl_FragColor = color;
     #include <colorspace_fragment>
   }
 `;
 
 export class GalleryMotion {
-  constructor(grid, onSelect, entry = { value: 0 }, onProgress = () => {}, onDepth = () => {}) {
+  constructor(grid, onSelect, entry = { value: 0 }, onProgress = () => {}) {
     this.grid = grid;
     this.stage = grid.closest(".work-stage");
     this.onSelect = onSelect;
     this.entry = entry;
     this.onProgress = onProgress;
-    this.onDepth = onDepth;
-    this.head = grid.closest(".work-surface").querySelector(".work-head");
     this.enabled = false;
     this.filterFlight = { value: 0 };
     this.filtering = false;
@@ -179,15 +175,6 @@ export class GalleryMotion {
     this.lastTime = performance.now();
     this.ready = false;
     this.disposed = false;
-    this.fallbackTravel = document.createElement("div");
-    this.fallbackTravel.className = "seabed-travel";
-    this.fallbackTravel.setAttribute("aria-hidden", "true");
-    this.stage.append(this.fallbackTravel);
-    this.stage.addEventListener("scroll", () => {
-      if (!this.enabled || (this.ready && !this.media.matches)) return;
-      const listEnd = Math.max(0, this.grid.offsetHeight - this.stage.clientHeight);
-      this.applyDepth(workDepth(this.stage.scrollTop, listEnd, Math.max(1350, innerHeight * 1.85)));
-    }, { signal: this.abort.signal, passive: true });
     this.stage.classList.add("sheet-preparing");
     try {
       this.renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
@@ -234,7 +221,6 @@ export class GalleryMotion {
         waterAspect: { value: 1 },
         coverHover: { value: this.coverHover.values },
         columns: { value: 2 },
-        sheetOpacity: { value: 1 },
         ...waterVeil.uniforms,
         maskEdges: { value: new THREE.Vector2(235, 315) },
         range: { value: new THREE.Vector2(-2600, 1200) },
@@ -463,7 +449,6 @@ export class GalleryMotion {
     this.cards = cards;
     this.current = this.target = this.speed = 0;
     this.stage.scrollTop = 0;
-    this.applyDepth(0);
     if (!this.ready || this.disposed) return;
     if (changed) this.buildAtlas();
     this.renderFrame(true);
@@ -473,7 +458,6 @@ export class GalleryMotion {
     this.coverHover.reset();
     this.hoverPoint = this.hoverHit = null;
     this.enabled = enabled;
-    if (!enabled) this.applyDepth(0);
     this.lastTime = performance.now();
     this.drag = null;
     if (enabled) {
@@ -486,30 +470,12 @@ export class GalleryMotion {
     }
   }
 
-  leaveForRoute(done, { onAscent } = {}) {
+  leaveForRoute(done) {
     this.cancelFilter();
     this.filtering = true;
     this.stage.setAttribute("aria-busy", "true");
     this.filterFlight.value = this.current;
     this.filterTimeline = gsap.timeline({ onComplete: done });
-    if (this.depth > .001) {
-      // Return the actual scroll/camera together before the orbital transition
-      // takes its surface snapshot. Ordinary list exits keep depth frozen.
-      this.filterTimeline.call(() => onAscent?.());
-      this.filterTimeline.to(this.filterFlight, {
-        value: 0,
-        duration: 1.7 + this.depth * 1.1,
-        ease: "power2.inOut",
-        onUpdate: () => {
-          this.current = this.target = this.filterFlight.value;
-          this.applyDepth(workDepth(this.current, this.listEnd, this.descentTravel));
-        },
-        onComplete: () => {
-          this.current = this.target = this.speed = 0;
-          this.applyDepth(0);
-        },
-      });
-    }
     this.filterTimeline.to(this.filterFlight, {
         value: this.contentHeight + this.start - this.minimum + 16,
         duration: 1.25,
@@ -604,23 +570,6 @@ export class GalleryMotion {
     this.target = clamp(this.target + amount, 0, this.maxTravel);
   }
 
-  applyDepth(depth) {
-    if (this.depth === depth && this.depthEnabled === this.enabled && this.depthHead === this.head) return;
-    this.depthEnabled = this.enabled;
-    this.depthHead = this.head;
-    this.depth = depth;
-    this.onDepth(depth);
-    document.body.classList.toggle("seabed-view", this.enabled && depth > .3);
-    const hide = smoothRange(.04, .36, depth);
-    if (this.head) {
-      this.head.style.opacity = String(1 - hide);
-      this.head.style.transform = `translateY(${-hide * 170}px)`;
-      this.head.inert = hide > .97;
-    }
-    if (this.material) this.material.uniforms.sheetOpacity.value = 1 - smoothRange(.08, .48, depth);
-    this.grid.closest(".work-surface").dataset.depth = depth.toFixed(3);
-  }
-
   updateMode() {
     const enabled = this.ready && !this.media.matches;
     this.stage.classList.toggle("sheet-ready", enabled);
@@ -683,10 +632,7 @@ export class GalleryMotion {
     const imageHeight = cardWidth / 2;
     this.rowPitch = imageHeight + 108;
     this.contentHeight = Math.ceil(this.cards.length / columns) * this.rowPitch;
-    const travel = workTravel(this.contentHeight, this.rowPitch, this.height);
-    this.listEnd = travel.listEnd;
-    this.descentTravel = travel.descent;
-    this.maxTravel = travel.max;
+    this.maxTravel = workScrollLimit(this.contentHeight, this.rowPitch, this.height, this.start);
     // Mobile browser chrome can resize the viewport without changing card
     // layout. Update travel but retain the decoded/uploaded atlas in that case.
     const atlasKey = `${this.sheetWidth}:${columns}:${this.cards.map(card => card.dataset.project).join(",")}`;
@@ -803,7 +749,7 @@ export class GalleryMotion {
       return;
     const blocked =
       this.grid.closest("[inert]") || document.querySelector("dialog[open]");
-    const finishProfile = profileFrame(this.renderer, this.depth > .8 ? "paper:seabed" : "paper:list");
+    const finishProfile = profileFrame(this.renderer, "paper:list");
     this.canvas.style.visibility = this.grid.closest("[inert]")
       ? "hidden"
       : "visible";
@@ -815,19 +761,6 @@ export class GalleryMotion {
         : damp(this.current, this.target, 8, dt);
     }
     this.speed = damp(this.speed, (this.current - last) / dt, 8, dt);
-    // Filter/route flights share paper travel, but must never drive the dive.
-    if (!this.filtering && !blocked)
-      this.applyDepth(workDepth(this.current, this.listEnd, this.descentTravel));
-    // Once the list has faded completely at depth, keep travel/route state
-    // alive but stop deforming and drawing an invisible 9,457-vertex sheet.
-    const hidden = this.material.uniforms.sheetOpacity.value <= 0;
-    if (hidden) {
-      if (!this.paperHidden) this.renderer.clear();
-      this.paperHidden = true;
-      finishProfile?.();
-      return;
-    }
-    this.paperHidden = false;
     this.pointer.x = damp(
       this.pointer.x,
       this.mobile ? 0 : this.pointerTarget.x,
@@ -918,7 +851,7 @@ export class GalleryMotion {
   }
 
   pick(event) {
-    if (!this.active() || this.depth > .48 || performance.now() < (this.ignoreClickUntil || 0))
+    if (!this.active() || performance.now() < (this.ignoreClickUntil || 0))
       return;
     this.ndc.set(
       (event.clientX / this.width) * 2 - 1,

@@ -189,9 +189,7 @@ function navigate(path) {
         navigation.timeScale(0.2);
     };
     if (page() === "work" && galleryMotion?.ready)
-      navigation = galleryMotion.leaveForRoute(beginFlight, {
-        onAscent: () => waterVeil.burst(),
-      });
+      navigation = galleryMotion.leaveForRoute(beginFlight);
     else beginFlight();
     return;
   }
@@ -421,7 +419,6 @@ function renderCards() {
       openProject,
       galleryEntry,
       updateGalleryProgress,
-      (depth) => scene?.setWorkDepth(depth),
     );
 }
 function updateGalleryProgress(value, label) {

@@ -10,7 +10,6 @@ import gsap from "gsap";
 import { WaterMotion } from "./water-motion.js";
 import { DayCycle } from "./day-cycle.js";
 import { waterVeil } from "./water-veil.js";
-import { submergedView } from "./work-depth.js";
 import { profileFrame } from "./performance-probe.js";
 import { renderBudget } from "./render-budget.js";
 import { releaseTextureDecoder } from "./compressed-textures.js";
@@ -49,7 +48,6 @@ export class PortfolioScene {
     this.dragOffset = 0;
     this.dragging = false;
     this.entered = false;
-    this.workDepth = 0;
     this.day = new DayCycle();
     this.timeCheck = 0;
     this.scene = new THREE.Scene();
@@ -277,7 +275,6 @@ export class PortfolioScene {
     const assets = await Promise.allSettled([
       run("ocean", () => this.ocean.prepare(this.renderer)),
       run("wildlife", () => this.underwater.visitors.prepare()),
-      run("seabed", () => this.underwater.seabed.prepare(this.renderer)),
       this.photoGallery.prepare(this.renderer, progress),
     ]);
     releaseTextureDecoder(this.renderer);
@@ -289,11 +286,9 @@ export class PortfolioScene {
     const visible = this.ocean.group.visible;
     const underwaterVisible = this.underwater.group.visible;
     const galleryVisible = this.photoGallery.group.visible;
-    const seabedVisible = this.underwater.seabed.group.visible;
     this.ocean.group.visible = true;
     this.underwater.group.visible = true;
     this.photoGallery.group.visible = true;
-    this.underwater.seabed.group.visible = true;
     // Rare visitors are also compiled now, not when their first pass begins.
     const visitors = this.underwater.visitors.creatures;
     const visitorVisibility = visitors.map((v) => v.visible);
@@ -306,7 +301,6 @@ export class PortfolioScene {
       this.ocean.group.visible = visible;
       this.underwater.group.visible = underwaterVisible;
       this.photoGallery.group.visible = galleryVisible;
-      this.underwater.seabed.group.visible = seabedVisible;
       visitors.forEach((v, i) => (v.visible = visitorVisibility[i]));
     }
   }
@@ -345,7 +339,6 @@ export class PortfolioScene {
       return;
     const enteringGallery = page === "gallery" && this.page !== page;
     this.page = page;
-    if (page !== "work") this.setWorkDepth(0);
     waterVeil.settle(page);
     this.dragOffset = 0;
     const oceanPage = page === "index" || page === "contact";
@@ -444,10 +437,6 @@ export class PortfolioScene {
       overwrite: true,
     });
   }
-  setWorkDepth(value) {
-    this.workDepth = THREE.MathUtils.clamp(value, 0, 1);
-    this.underwater.setDepth(this.workDepth);
-  }
   setTimeMode(mode) {
     this.day.setMode(mode, this.reduced);
   }
@@ -484,7 +473,7 @@ export class PortfolioScene {
     );
     const finishProfile = profileFrame(
       this.renderer,
-      `${this.page}:${this.workDepth > 0.8 ? "seabed" : this.workDepth > 0.05 ? "descent" : "surface"}`,
+      `${this.page}:surface`,
     );
     this.clock.update();
     const delta = Math.min(this.clock.getDelta(), 0.05);
@@ -521,11 +510,7 @@ export class PortfolioScene {
       this.underwater.update(t, delta * motion, this.smoothPointer);
     const mobile = innerWidth < 650,
       inGallery = this.page === "gallery";
-    const renderView =
-      this.page === "work"
-        ? submergedView(this.view, this.workDepth)
-        : this.view;
-    applyCameraView(this.camera, renderView, this.page, this.smoothPointer, {
+    applyCameraView(this.camera, this.view, this.page, this.smoothPointer, {
       mobile,
       reduced: this.reduced,
       contact: this.contactMix.value,
