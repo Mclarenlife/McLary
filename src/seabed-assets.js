@@ -2,18 +2,20 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { compressedTextures } from "./compressed-textures.js";
+import { mobileModels } from './model-quality.js';
 
 // All geometry, textures and decoder files are hosted locally, including on Pages.
 export async function loadSeabedAssets(day, time, reveal, renderer) {
   const draco=new DRACOLoader().setDecoderPath("/models/draco/").setWorkerLimit(2);
   const loader=new GLTFLoader().setDRACOLoader(draco).setKTX2Loader(compressedTextures(renderer));
+  const mobile=mobileModels();
   try {
     const results=await Promise.allSettled(["shipwreck-detail","ruins-detail"].map(async name => {
       const version=name==="ruins-detail"?"?v=individual-fractures-2":"";
       let compressed;
       const {scene}=await (async()=>{
         await compressedTextures(renderer).init();
-        compressed=await loader.loadAsync(`/models/${name}-ktx2.glb`);
+        compressed=await loader.loadAsync(mobile ? `/models/mobile/${name}.glb` : `/models/${name}-ktx2.glb`);
         // GLTFLoader can resolve a model even when an embedded texture failed.
         // Inspect declared maps so a blank material never silently replaces it.
         const materials=await compressed.parser.getDependencies("material");

@@ -14,6 +14,7 @@ import { submergedView } from "./work-depth.js";
 import { profileFrame } from "./performance-probe.js";
 import { renderBudget } from "./render-budget.js";
 import { releaseTextureDecoder } from "./compressed-textures.js";
+import { releaseModelDecoder } from "./model-quality.js";
 
 // Scene geometry and interaction are authored for this project. The gallery's
 // bundled geographic data is credited in public/earth.
@@ -280,6 +281,7 @@ export class PortfolioScene {
       this.photoGallery.prepare(this.renderer, progress),
     ]);
     releaseTextureDecoder(this.renderer);
+    await releaseModelDecoder();
     // Fetch audio only after visual assets settle, overlapping shader preparation.
     await onAssetsReady();
     const failed = assets.find((asset) => asset.status === "rejected");

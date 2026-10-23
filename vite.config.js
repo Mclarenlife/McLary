@@ -55,6 +55,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (id.endsWith("/meshopt_decoder.module.js")) return "meshopt";
           if (id.includes("/three/")) return "three";
           if (id.includes("/gsap/")) return "motion";
         },
