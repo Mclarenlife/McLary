@@ -1,12 +1,14 @@
 // A small Canvas2D runner. No textures, audio, network requests or WebGL context.
 export const RUN_WIDTH = 560;
-const FLOOR = 122,
+const HEIGHT = 123,
+  FLOOR = HEIGHT - 0.5,
   BIRD_X = 58,
   GRAVITY = 1120,
   JUMP = 408;
-export function createRun(best = 0) {
+export function createRun(best = 0, width = RUN_WIDTH) {
   return {
     mode: "idle",
+    width,
     y: 0,
     vy: 0,
     distance: 0,
@@ -20,7 +22,7 @@ export function createRun(best = 0) {
 }
 export function jump(run) {
   if (run.mode !== "running")
-    Object.assign(run, createRun(run.best), { mode: "running" });
+    Object.assign(run, createRun(run.best, run.width), { mode: "running" });
   if (run.y === 0) run.vy = -JUMP;
 }
 export function advanceRun(run, delta, random = Math.random) {
@@ -40,7 +42,7 @@ export function advanceRun(run, delta, random = Math.random) {
     run.gap -= travel;
     if (run.gap <= 0) {
       run.obstacles.push({
-        x: RUN_WIDTH + 24,
+        x: run.width + 24,
         width: 19 + random() * 10,
         height: 19 + random() * 12,
         kind: random() > 0.5 ? "buoy" : "rock",
@@ -119,16 +121,19 @@ export function mountLoadingGame(host) {
   }
   function draw() {
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    context.clearRect(0, 0, RUN_WIDTH, 154);
+    context.clearRect(0, 0, run.width, HEIGHT);
     context.lineWidth = 1;
     context.strokeStyle = sea;
     context.beginPath();
     context.moveTo(0, 81);
-    context.lineTo(RUN_WIDTH, 81);
+    context.lineTo(run.width, 81);
     context.stroke();
     // Slow, sparse distant waves; the foreground carries the running motion.
-    for (let i = 0; i < 9; i++) {
-      const x = ((((i * 83 - run.distance * 0.15) % 620) + 620) % 620) - 30;
+    const waveSpan = run.width + 80;
+    for (let i = 0; i < Math.ceil(waveSpan / 83); i++) {
+      const x =
+        ((((i * 83 - run.distance * 0.15) % waveSpan) + waveSpan) % waveSpan) -
+        30;
       context.beginPath();
       context.moveTo(x, 91 + (i % 3) * 6);
       context.lineTo(x + 17 + (i % 3) * 8, 91 + (i % 3) * 6);
@@ -136,22 +141,18 @@ export function mountLoadingGame(host) {
     }
     context.strokeStyle = muted;
     context.beginPath();
-    context.arc(449, 40, 13, Math.PI, 0);
+    const sunX = run.width * 0.8;
+    context.arc(sunX, 40, 13, Math.PI, 0);
     context.stroke();
     context.beginPath();
-    context.moveTo(426, 41);
-    context.lineTo(472, 41);
+    context.moveTo(sunX - 23, 41);
+    context.lineTo(sunX + 23, 41);
     context.stroke();
     context.strokeStyle = ink;
     context.beginPath();
     context.moveTo(0, FLOOR);
-    context.lineTo(RUN_WIDTH, FLOOR);
+    context.lineTo(run.width, FLOOR);
     context.stroke();
-    context.fillStyle = muted;
-    for (let i = 0; i < 17; i++) {
-      const x = (((i * 43 - run.distance) % 731) + 731) % 731;
-      context.fillRect(x, FLOOR + 8 + (i % 3) * 5, i % 2 ? 5 : 2, 1);
-    }
     for (const obstacle of run.obstacles) {
       const { x, width: w, height: h, kind } = obstacle;
       context.fillStyle = ink;
@@ -182,7 +183,7 @@ export function mountLoadingGame(host) {
           : run.mode === "over"
             ? "ONE MORE WAVE?"
             : "A LITTLE RUN BEFORE THE DIVE",
-        280,
+        run.width / 2,
         50,
       );
     }
@@ -253,18 +254,22 @@ export function mountLoadingGame(host) {
   }
   function resize() {
     ratio = Math.min(devicePixelRatio || 1, 1.5);
-    canvas.width = RUN_WIDTH * ratio;
-    canvas.height = 154 * ratio;
+    run.width = Math.max(1, button.clientWidth);
+    canvas.width = Math.round(run.width * ratio);
+    canvas.height = Math.round(HEIGHT * ratio);
     draw();
   }
   button.addEventListener("click", play);
   button.addEventListener("keydown", key);
   document.addEventListener("keydown", pageKey);
   document.addEventListener("visibilitychange", visibility);
+  const observer = new ResizeObserver(resize);
+  observer.observe(button);
   resize();
   return {
     dispose() {
       disposed = true;
+      observer.disconnect();
       cancelAnimationFrame(frame);
       button.removeEventListener("click", play);
       button.removeEventListener("keydown", key);

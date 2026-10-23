@@ -539,7 +539,7 @@ const intro = document.createElement("section");
 intro.className = "intro";
 intro.dataset.loading = "true";
 intro.setAttribute("aria-label", "Welcome to McLary");
-intro.innerHTML = `<div class="intro-inner"><div class="intro-symbol" aria-hidden="true">M.</div><h2>MCLARY</h2><p>${profile.introduction}</p><div class="loading-game" role="group" aria-label="海岸跳跃小游戏"></div><button class="pill" id="enter" disabled>Preparing your space</button><div class="intro-progress" role="progressbar" aria-label="Loading portfolio" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div><p class="intro-status" role="status">Loading your projects · 0%</p><button class="muted-entry" disabled>ENTER WITHOUT AUDIO</button></div>`;
+intro.innerHTML = `<div class="intro-inner"><div class="intro-symbol" aria-hidden="true">M.</div><h2>MCLARY</h2><p>${profile.introduction}</p><button class="pill" id="enter" disabled>Preparing your space</button><div class="intro-progress" role="progressbar" aria-label="Loading portfolio" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div><p class="intro-status" role="status">Loading your projects · 0%</p><button class="muted-entry" disabled>ENTER WITHOUT AUDIO</button></div><div class="loading-game" role="group" aria-label="海岸跳跃小游戏"></div>`;
 document.body.append(intro);
 const loadingGame = mountLoadingGame(intro.querySelector(".loading-game"));
 async function start() {
