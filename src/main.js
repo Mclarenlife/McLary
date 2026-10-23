@@ -10,6 +10,7 @@ import { OrbitalTransition } from "./orbital-transition.js";
 import { bindTimeControl, timeControlMarkup } from "./time-control.js";
 import { AmbientMusic, prepareSceneAudio } from "./ambient-music.js";
 import { waterVeil } from "./water-veil.js";
+import { mountLoadingGame } from "./loading-game.js";
 
 let timeControl;
 let scene;
@@ -494,6 +495,7 @@ function updateSoundButton() {
 function enter(withSound = false) {
   if (entered) return;
   entered = true;
+  loadingGame.dispose();
   if (page() === "work") waterVeil.burst();
   if (scene) scene.entered = true;
   if (withSound) toggleSound(true);
@@ -537,8 +539,9 @@ const intro = document.createElement("section");
 intro.className = "intro";
 intro.dataset.loading = "true";
 intro.setAttribute("aria-label", "Welcome to McLary");
-intro.innerHTML = `<div class="intro-inner"><div class="intro-symbol" aria-hidden="true">M.</div><h2>MCLARY</h2><p>${profile.introduction}</p><button class="pill" id="enter" disabled>Preparing your space</button><div class="intro-progress" role="progressbar" aria-label="Loading portfolio" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div><p class="intro-status" role="status">Loading your projects · 0%</p></div><button class="muted-entry" disabled>ENTER WITHOUT AUDIO</button>`;
+intro.innerHTML = `<div class="intro-inner"><div class="intro-symbol" aria-hidden="true">M.</div><h2>MCLARY</h2><p>${profile.introduction}</p><div class="loading-game" role="group" aria-label="海岸跳跃小游戏"></div><button class="pill" id="enter" disabled>Preparing your space</button><div class="intro-progress" role="progressbar" aria-label="Loading portfolio" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div><p class="intro-status" role="status">Loading your projects · 0%</p><button class="muted-entry" disabled>ENTER WITHOUT AUDIO</button></div>`;
 document.body.append(intro);
+const loadingGame = mountLoadingGame(intro.querySelector(".loading-game"));
 async function start() {
   // Fetch only: creating/resuming an AudioContext still requires the sound gesture.
   prepareSceneAudio().catch((error) =>
