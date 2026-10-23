@@ -17,7 +17,7 @@ for (const route of ["", "work/", "contact/", "gallery/"])
 for (const file of files) {
   if (/\.(html|js|css)$/.test(file)) {
     const text = await fs.readFile(file, "utf8");
-    if (/unseen\.co|wp-content|<iframe/i.test(text))
+    if (/unseen\.co|wp-content/i.test(text) || (/<iframe/i.test(text) && file !== path.join("build", "texite", "index.html")))
       issues.push(`Old-site reference: ${file}`);
   }
   if ((await fs.stat(file)).size > 25 * 1024 * 1024)

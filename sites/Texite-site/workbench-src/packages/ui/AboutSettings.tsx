@@ -1,0 +1,81 @@
+import { ArrowUpRight, Code2 } from 'lucide-react';
+import packageInfo from '../../package.json';
+import { UpdateSettings } from './UpdateSettings';
+
+export function AboutSettings({ onPrepareUpdate }: { onPrepareUpdate(): Promise<void> }) {
+  return (
+    <div className="about-settings">
+      <div className="about-brand">
+        <div className="brand-symbol" aria-hidden="true">
+          t.
+        </div>
+        <div>
+          <h2>Texite</h2>
+          <span>版本 {packageInfo.version}</span>
+        </div>
+      </div>
+      <div className="about-links">
+        <a href="https://github.com/Mclarenlife/Texite" target="_blank" rel="noreferrer">
+          <Code2 size={17} />
+          <span>
+            GitHub 项目<small>github.com/Mclarenlife/Texite</small>
+          </span>
+          <ArrowUpRight size={16} />
+        </a>
+        <a href="https://mclarenlife.github.io/" target="_blank" rel="noreferrer">
+          <span className="about-author">M</span>
+          <span>
+            作者官网<small>mclarenlife.github.io</small>
+          </span>
+          <ArrowUpRight size={16} />
+        </a>
+      </div>
+      <UpdateSettings onPrepare={onPrepareUpdate} />
+      <div className="about-changelog">
+        <h3>更新日志</h3>
+        <section>
+          <h4>
+            {packageInfo.version}
+            <time>2026.10.14</time>
+          </h4>
+          <ul>
+            <li>修复设置页滚动遮挡，扩大顶栏空白处的窗口拖动区域。</li>
+            <li>AI 差异窗口可调整大小、横向滚动，支持按模式清空记录。</li>
+            <li>WebDAV 使用项目名保存，兼容旧命名并保留多设备同步关联。</li>
+            <li>同步与存储中可清理备份、修改历史及 AI 记录。</li>
+          </ul>
+        </section>
+        <section>
+          <h4>0.9.0-preview.6</h4>
+          <ul>
+            <li>最近删除支持永久删除与可选本地文件清理。</li>
+            <li>拖入文件或目标文件夹导入，底栏展示导入进度。</li>
+            <li>WebDAV 未同步提醒、诊断状态颜色与 GitHub Release 更新入口。</li>
+          </ul>
+        </section>
+        <section>
+          <h4>0.9.0-preview.5</h4>
+          <ul>
+            <li>文件与文件夹右键删除，二次确认并保留备份。</li>
+            <li>成功编译后以 PDF 首页生成项目封面。</li>
+            <li>编辑器撤销与重做、可折叠的文档脉络、参考文献精确文本搜索。</li>
+            <li>PDF 选中文字词数统计，统一工作区留白与文件图标间距。</li>
+          </ul>
+        </section>
+        <section>
+          <h4>0.9.0-preview.4</h4>
+          <ul>
+            <li>源码与 PDF 双向定位、项目备份与还原、按时间清理历史。</li>
+            <li>限定项目搜索范围，可调整侧栏上下分区。</li>
+          </ul>
+        </section>
+        <section>
+          <h4>0.9.0-preview</h4>
+          <ul>
+            <li>WebDAV 同步、多项目选项卡，以及同步与存储设置。</li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  );
+}

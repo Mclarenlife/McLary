@@ -116,3 +116,9 @@ Run `node scripts/check-orbital.mjs` to check the offshore geographic anchor, co
 Keyboard focus indicators, native modal dialogs, a keyboard-contained navigation menu, reduced-motion handling, adaptive rendering resolution and a 2D content fallback are included. In a browser without WebGL, the portfolio and local project imagery remain accessible. A graphics-capable browser is required for the 3D experience.
 
 Run `node scripts/check-route-list.mjs` to verify route departures start from current scroll, arrivals are prepared below the viewport, and list input is restored after entry.
+
+## Texite product website
+
+Texite is published at `/texite/` and featured first in Work. Its source stays in the sibling `../sites/Texite site` directory; the GitHub source archive also includes it under `sites/Texite-site`. `scripts/build-texite.mjs` packages the current static pages and the supplied prebuilt workbench without modifying the original project. It runs as part of `build-subsites.mjs`; `TEXITE_SITE_ROOT` can override the source location.
+
+Run `node scripts/check-texite.mjs` after building to validate relative links, the embedded workbench, sample documents and cover. The web workbench retains its existing simulated PDF compilation and preset AI behavior. The editable cover is `public/covers/texite.svg`, with a 1600 × 800 WebP used by the portfolio.

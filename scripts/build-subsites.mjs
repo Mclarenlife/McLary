@@ -34,3 +34,5 @@ for (const entry of ["index.html", "assets", "css", "js"]) {
   await cp(path.join(bwSource, entry), path.join(bwDestination, entry), { recursive: true });
 }
 console.log("B&W included at /bw/.");
+
+await import("./build-texite.mjs");

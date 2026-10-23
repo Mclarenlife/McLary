@@ -14,6 +14,17 @@ export const profile = {
 // Published projects in the portfolio.
 export const projects = [
   {
+    id: "texite",
+    title: "Texite",
+    category: "Digital",
+    year: "2026",
+    color: "#f6f5ef",
+    image: "/covers/texite.webp",
+    url: "/texite/",
+    subtitle: "A quieter space for writing",
+    description: "An interactive product website for a local-first LaTeX editor. Explore writing, typesetting and revision through a hands-on workspace demo.",
+  },
+  {
     id: "files-archive",
     title: "McLary’s Files",
     category: "Digital",
