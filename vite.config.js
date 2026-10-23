@@ -61,5 +61,9 @@ export default defineConfig({
       },
     },
   },
-  server: { host: "127.0.0.1", port: 4173, strictPort: true },
+  server: {
+    host: "127.0.0.1", port: 4173, strictPort: true,
+    // Encoders lock temporary outputs; those and deployment mirrors are not source.
+    watch: { ignored: ["**/artifacts/**"] },
+  },
 });

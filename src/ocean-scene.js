@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { loadCompressedTexture } from "./compressed-textures.js";
 import { OceanAtmosphere } from "./ocean-atmosphere.js";
 import { loadMarineModel } from "./marine-models.js";
 import { sampleWaveField } from "./wave-spectrum.js";
@@ -268,7 +269,7 @@ export class OceanScene {
   async prepare(renderer) {
     const [hull, skyMap] = await Promise.all([
       loadMarineModel("boat-hull"),
-      new THREE.TextureLoader().loadAsync("/textures/ocean-sky.webp"),
+      loadCompressedTexture(renderer, "/textures/ocean-sky.ktx2", "/textures/ocean-sky.webp"),
     ]);
     skyMap.colorSpace = THREE.SRGBColorSpace;
     skyMap.wrapS = THREE.RepeatWrapping;

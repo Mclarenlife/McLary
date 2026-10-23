@@ -119,6 +119,18 @@ The main scene and paper share a responsive resolution budget: up to 1.7 DPR on 
 
 Run `node scripts/check-render-performance.mjs` for numerical equivalence and frame-budget checks. For local diagnostics, open `/?profile` or `/work/?profile` in the Vite dev server. Each renderer reports six-second `PERF` windows in the console and its canvas `data-performance` attribute (frame intervals, CPU submission time, draw calls, triangles and resource counts). CPU submission time is not GPU execution time. This recorder is disabled in production. Desktop viewport tests do not substitute for real iPhone/Android performance measurements.
 
+### GPU-compressed scene textures
+
+The detailed wreck/ruins use embedded `KHR_texture_basisu` KTX2 textures in `*-ktx2.glb`. All 1024 × 1024 source dimensions, geometry, UVs and materials are retained. UASTC quality 4 with lossless Zstd 18 (no RDO) protects normal/roughness detail; identical wood data maps share GPU textures. The 4096 × 2048 sky uses ETC1S quality 255. Mipmaps are generated offline. Color maps are tagged sRGB, normal/roughness maps linear; the sky's vertical flip is baked because compressed textures cannot flip on upload.
+
+One `KTX2Loader` detects the actual renderer's supported ASTC/BC7/ETC formats and shares at most two workers. Decoder files come from the installed Three.js version and are served locally under `/textures/basis/`. Workers are disposed after all scene assets finish preloading. The original GLBs/WebP remain available for download/decoder failure fallback and as authoring sources; they are not fetched on a successful compressed load.
+
+Measured asset sizes (uncompressed HTTP file bytes, not timing): wreck + ruins + sky originally 14,012,784 bytes; compressed versions plus Basis JS/WASM total 11,432,822 bytes, about 18% less. The sky alone is larger on the network, offset by smaller embedded model textures. Converted texture storage including mipmaps falls from approximately 106.7 MiB RGBA8 to 24 MiB on the tested BC7 desktop GPU, or about 18.7 MiB with ASTC model textures and ETC2 RGB sky on compatible mobile GPUs. These are texture-payload figures, not whole-tab memory or real-phone measurements. Network caching, transcoding time and GPU support affect actual startup speed.
+
+Globe country/region masks, text/cover atlases, generated water/cloud effects and original photography are unchanged. Fine map lines and text stay uncompressed, while the existing small photographic WebPs avoid a larger download. No geometry reduction was introduced by this conversion.
+
+Regenerate with Khronos KTX-Software 4.4.2: export `public/textures/ocean-sky.webp` losslessly to a temporary PNG, then run `node scripts/compress-seabed-textures.mjs /path/to/toktx.exe /path/to/sky.png`. The script reads original GLBs and writes separate compressed assets; temporary inputs/results go to ignored `artifacts/ktx-conversion/`. Run `node scripts/check-compressed-textures.mjs` to verify geometry identity, dimensions, mipmaps, color spaces, references and transcoder version. Opt-in local `?profile` logs the actual GPU texture formats and mip payload sizes.
+
 ## Accessibility and resilience
 
 Keyboard focus indicators, native modal dialogs, a keyboard-contained navigation menu, reduced-motion handling, adaptive rendering resolution and a 2D content fallback are included. In a browser without WebGL, the portfolio and local project imagery remain accessible. A graphics-capable browser is required for the 3D experience.

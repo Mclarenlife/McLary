@@ -13,6 +13,7 @@ import { waterVeil } from "./water-veil.js";
 import { submergedView } from "./work-depth.js";
 import { profileFrame } from "./performance-probe.js";
 import { renderBudget } from "./render-budget.js";
+import { releaseTextureDecoder } from "./compressed-textures.js";
 
 // Scene geometry and interaction are authored for this project. The gallery's
 // bundled geographic data is credited in public/earth.
@@ -270,12 +271,15 @@ export class PortfolioScene {
   }
   async prepare() {
     await document.fonts.ready;
-    await Promise.all([
+    const assets = await Promise.allSettled([
       this.ocean.prepare(this.renderer),
       this.underwater.visitors.prepare(),
       this.underwater.seabed.prepare(this.renderer),
       this.photoGallery.prepare(this.renderer),
     ]);
+    releaseTextureDecoder(this.renderer);
+    const failed = assets.find(asset => asset.status === "rejected");
+    if (failed) throw failed.reason;
     const visible = this.ocean.group.visible;
     const underwaterVisible = this.underwater.group.visible;
     const galleryVisible = this.photoGallery.group.visible;

@@ -1,15 +1,46 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+import { compressedTextures } from "./compressed-textures.js";
 
 // All geometry, textures and decoder files are hosted locally, including on Pages.
 export async function loadSeabedAssets(day, time, reveal, renderer) {
   const draco=new DRACOLoader().setDecoderPath("/models/draco/").setWorkerLimit(2);
-  const loader=new GLTFLoader().setDRACOLoader(draco);
+  const loader=new GLTFLoader().setDRACOLoader(draco).setKTX2Loader(compressedTextures(renderer));
   try {
-    const models=await Promise.all(["shipwreck-detail","ruins-detail"].map(async name => {
+    const results=await Promise.allSettled(["shipwreck-detail","ruins-detail"].map(async name => {
       const version=name==="ruins-detail"?"?v=individual-fractures-2":"";
-      const {scene}=await loader.loadAsync(`/models/${name}.glb${version}`);
+      let compressed;
+      const {scene}=await (async()=>{
+        await compressedTextures(renderer).init();
+        compressed=await loader.loadAsync(`/models/${name}-ktx2.glb`);
+        // GLTFLoader can resolve a model even when an embedded texture failed.
+        // Inspect declared maps so a blank material never silently replaces it.
+        const materials=await compressed.parser.getDependencies("material");
+        compressed.parser.json.materials.forEach((definition,index)=>{
+          const material=materials[index], pbr=definition.pbrMetallicRoughness;
+          if((definition.normalTexture&&!material.normalMap)||
+            (pbr?.baseColorTexture&&!material.map)||
+            (pbr?.metallicRoughnessTexture&&!material.roughnessMap))
+            throw new Error(`Missing compressed material texture: ${definition.name}`);
+        });
+        return compressed;
+      })().catch(error=>{
+        if(compressed) {
+          const resources=new Set();
+          compressed.scene.traverse(mesh=>{
+            if(mesh.geometry) resources.add(mesh.geometry);
+            if(mesh.material) {
+              resources.add(mesh.material);
+              for(const value of Object.values(mesh.material)) if(value?.isTexture) resources.add(value);
+            }
+          });
+          resources.forEach(resource=>resource.dispose());
+        }
+        // A blocked WASM/worker or failed compressed download must not erase the scene.
+        console.warn(`Compressed seabed texture unavailable; loading original ${name}`, error);
+        return loader.loadAsync(`/models/${name}.glb${version}`);
+      });
       scene.traverse(mesh=>{
         if(!mesh.isMesh) return;
         const material=mesh.material;
@@ -44,8 +75,22 @@ export async function loadSeabedAssets(day, time, reveal, renderer) {
         };
         material.customProgramCacheKey=()=>"blender-seabed-v1";
       });
+      if(import.meta.env?.DEV && new URLSearchParams(location.search).has("profile")) {
+        const textures=new Set();
+        scene.traverse(mesh=>{
+          for(const map of [mesh.material?.map,mesh.material?.normalMap,mesh.material?.roughnessMap])
+            if(map) textures.add(map);
+        });
+        console.info("KTX2 "+JSON.stringify({name,textures:[...textures].map(t=>({
+          compressed:t.isCompressedTexture===true,format:t.format,mips:t.mipmaps.length,
+          width:t.image.width,height:t.image.height,
+          bytes:t.mipmaps.reduce((sum,m)=>sum+(m.data?.byteLength||0),0)
+        }))}));
+      }
       return scene;
     }));
-    return {wreck:models[0],ruins:models[1]};
+    const failed=results.find(result=>result.status==="rejected");
+    if(failed) throw failed.reason;
+    return {wreck:results[0].value,ruins:results[1].value};
   } finally {draco.dispose();}
 }
