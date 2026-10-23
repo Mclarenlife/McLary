@@ -49,9 +49,13 @@ for (const name of ["shipwreck-detail", "ruins-detail"]) {
     assert.equal(ktx[dfd + 14], color ? 2 : 1, "sRGB color and linear data maps must stay distinct");
   }
 }
-for (const file of ["basis_transcoder.js", "basis_transcoder.wasm"])
-  assert.deepEqual(await fs.readFile(`public/textures/basis/${file}`),
-    await fs.readFile(`node_modules/three/examples/jsm/libs/basis/${file}`));
+for (const file of ["basis_transcoder.js", "basis_transcoder.wasm"]) {
+  const local = await fs.readFile(`public/textures/basis/${file}`);
+  const upstream = await fs.readFile(`node_modules/three/examples/jsm/libs/basis/${file}`);
+  if (file.endsWith(".js"))
+    assert.equal(local.toString().replace(/\r\n/g, "\n"), upstream.toString().replace(/\r\n/g, "\n"));
+  else assert.deepEqual(local, upstream);
+}
 const sky = await fs.readFile("public/textures/ocean-sky.ktx2");
 assert.equal(sky.readUInt32LE(20), 4096);
 assert.equal(sky.readUInt32LE(24), 2048);
