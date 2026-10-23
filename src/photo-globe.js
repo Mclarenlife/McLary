@@ -9,6 +9,7 @@ import {
   regionTexture,
 } from "./globe-surface.js";
 import { SpaceDecor } from "./space-decor.js";
+import { loadBakedGlobe } from "./baked-globe.js";
 
 export const EARTH_RADIUS = 2.7;
 export const ORBIT_RADIUS = 3.65;
@@ -85,25 +86,64 @@ export class PhotoGlobe {
     this.orbitAngle = 0.8;
     this.interactionEnabled = false;
   }
-  async prepare(renderer) {
+  async prepare(renderer, progress) {
+    const run = (id, operation) =>
+      progress ? progress.run(id, operation) : operation(() => {});
     const loader = new THREE.TextureLoader();
+    await Promise.all([
+      run("maps", async (report) => {
+        try {
+          const maps = await loadBakedGlobe(renderer, report);
+          this.material.uniforms.worldMap.value = maps.world;
+          this.material.uniforms.flightMap.value = maps.flight;
+          this.material.uniforms.flightBounds.value.set(...maps.flightBounds);
+          maps.regions.forEach((region) => this.regions.set(region.id, region));
+        } catch (error) {
+          console.warn(
+            "Baked maps unavailable; using geographic source data",
+            error,
+          );
+          await this.prepareLegacyMaps(renderer);
+        }
+        this.material.uniforms.regionMap.value = this.regions
+          .values()
+          .next().value.texture;
+        this.material.uniforms.contextMap.value = this.regions
+          .values()
+          .next().value.contextTexture;
+      }),
+      run("photos", async (report) => {
+        let done = 0;
+        const photos = await Promise.all(
+          photographs.map(async (p) => {
+            const source = p.preview || p.image;
+            const texture = source
+              ? await loader.loadAsync(source).catch(() => {
+                  console.warn(`Gallery preview unavailable: ${p.id}`);
+                  return null;
+                })
+              : null;
+            report((++done / photographs.length) * 0.9);
+            return texture;
+          }),
+        );
+        photos.forEach((texture, i) =>
+          this.addPhoto(texture, photographs[i], renderer),
+        );
+      }),
+    ]);
+    this.ready = true;
+    this.select(this.selected, true);
+  }
+  async prepareLegacyMaps(renderer) {
     const loadJSON = async (url) => {
       const response = await fetch(url);
       if (!response.ok) throw Error(`Gallery data unavailable: ${url}`);
       return response.json();
     };
-    const [world, data, ...photos] = await Promise.all([
+    const [world, data] = await Promise.all([
       loadJSON("/earth/countries.json?v=coastal-detail-2"),
       loadJSON("/earth/regions.json"),
-      ...photographs.map((p) => {
-        const source = p.preview || p.image;
-        return source
-          ? loader.loadAsync(source).catch(() => {
-              console.warn(`Gallery preview unavailable: ${p.id}`);
-              return null;
-            })
-          : Promise.resolve(null);
-      }),
     ]);
     const map = countryTexture(
       world.countries,
@@ -134,17 +174,6 @@ export class PhotoGlobe {
       region.contextBounds = new THREE.Vector4(...context.bounds);
       renderer.initTexture(region.contextTexture);
     }
-    this.material.uniforms.regionMap.value = this.regions
-      .values()
-      .next().value.texture;
-    this.material.uniforms.contextMap.value = this.regions
-      .values()
-      .next().value.contextTexture;
-    photos.forEach((texture, i) =>
-      this.addPhoto(texture, photographs[i], renderer),
-    );
-    this.ready = true;
-    this.select(this.selected, true);
   }
   addPhoto(texture, photo, renderer) {
     if (!texture) {

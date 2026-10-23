@@ -62,11 +62,14 @@ export class OrbitalTransition {
     this.patch.frustumCulled = false;
     this.patch.visible = false;
   }
-  prepare(scene) {
+  async prepare(scene) {
     scene.scene.add(this.patch);
     this.patch.visible = true;
-    scene.renderer.compile(scene.scene, scene.camera);
-    this.patch.visible = false;
+    try {
+      await scene.renderer.compileAsync(scene.scene, scene.camera);
+    } finally {
+      this.patch.visible = false;
+    }
   }
   start(swap, onComplete, { scene, entering, destination }) {
     this.cancel();

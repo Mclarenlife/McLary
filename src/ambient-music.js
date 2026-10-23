@@ -1,17 +1,61 @@
 import { createUnderwaterImpulse } from "./underwater-impulse.js";
 const assets = {
-  sea: "/audio/tidal-notes.wav?v=3",
-  space: "/audio/distant-orbit.wav?v=2",
-  dive: "/audio/water-entry.wav?v=1",
-  emerge: "/audio/water-emerge.wav?v=1",
+  sea: { name: "tidal-notes", bytes: 852053, wavVersion: 3 },
+  space: { name: "distant-orbit", bytes: 1039276, wavVersion: 2 },
+  dive: { name: "water-entry", bytes: 151005, wavVersion: 1 },
+  emerge: { name: "water-emerge", bytes: 152381, wavVersion: 1 },
 };
 let prepared;
-export function prepareSceneAudio() {
+const fallbackAudio = new Set();
+const wavURL = (id) =>
+  `/audio/${assets[id].name}.wav?v=${assets[id].wavVersion}`;
+async function fetchAudio(url, onBytes = () => {}) {
+  const response = await fetch(url, { priority: "low" });
+  if (!response.ok) throw new Error(`Audio unavailable: ${url}`);
+  if (!response.body?.getReader) return response.arrayBuffer();
+  const reader = response.body.getReader(),
+    chunks = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      size += value.byteLength;
+      onBytes(size);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes.buffer;
+}
+export function prepareSceneAudio(onProgress = () => {}) {
+  const loaded = Object.fromEntries(Object.keys(assets).map((id) => [id, 0]));
+  const total = Object.values(assets).reduce((sum, a) => sum + a.bytes, 0);
+  const report = (id, bytes) => {
+    loaded[id] = Math.min(assets[id].bytes, bytes);
+    onProgress(Object.values(loaded).reduce((sum, n) => sum + n, 0) / total);
+  };
   return (prepared ??= Promise.all(
-    Object.entries(assets).map(async ([id, url]) => {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`Audio unavailable: ${id}`);
-      return [id, await response.arrayBuffer()];
+    Object.entries(assets).map(async ([id, asset]) => {
+      let bytes;
+      try {
+        bytes = await fetchAudio(`/audio/${asset.name}.flac?v=1`, (size) =>
+          report(id, size),
+        );
+        fallbackAudio.delete(id);
+      } catch {
+        bytes = await fetchAudio(wavURL(id));
+        fallbackAudio.add(id);
+      }
+      report(id, asset.bytes);
+      return [id, bytes];
     }),
   )
     .then(Object.fromEntries)
@@ -206,10 +250,19 @@ export class AmbientMusic {
     this.bufferPromise ??= prepareSceneAudio()
       .then(async (data) => {
         const decoded = await Promise.all(
-          Object.entries(data).map(async ([id, bytes]) => [
-            id,
-            await this.context.decodeAudioData(bytes.slice(0)),
-          ]),
+          Object.entries(data).map(async ([id, bytes]) => {
+            try {
+              return [id, await this.context.decodeAudioData(bytes.slice(0))];
+            } catch (error) {
+              // Some older Web Audio implementations cannot decode native FLAC.
+              if (fallbackAudio.has(id)) throw error;
+              const wav = await fetchAudio(wavURL(id));
+              const buffer = await this.context.decodeAudioData(wav.slice(0));
+              fallbackAudio.add(id);
+              data[id] = wav;
+              return [id, buffer];
+            }
+          }),
         );
         return Object.fromEntries(decoded);
       })

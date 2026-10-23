@@ -269,16 +269,20 @@ export class PortfolioScene {
       document.dispatchEvent(new CustomEvent("scene-unavailable"));
     });
   }
-  async prepare() {
+  async prepare(progress, onAssetsReady = () => {}) {
+    const run = (id, operation) =>
+      progress ? progress.run(id, operation) : operation();
     await document.fonts.ready;
     const assets = await Promise.allSettled([
-      this.ocean.prepare(this.renderer),
-      this.underwater.visitors.prepare(),
-      this.underwater.seabed.prepare(this.renderer),
-      this.photoGallery.prepare(this.renderer),
+      run("ocean", () => this.ocean.prepare(this.renderer)),
+      run("wildlife", () => this.underwater.visitors.prepare()),
+      run("seabed", () => this.underwater.seabed.prepare(this.renderer)),
+      this.photoGallery.prepare(this.renderer, progress),
     ]);
     releaseTextureDecoder(this.renderer);
-    const failed = assets.find(asset => asset.status === "rejected");
+    // Fetch audio only after visual assets settle, overlapping shader preparation.
+    await onAssetsReady();
+    const failed = assets.find((asset) => asset.status === "rejected");
     if (failed) throw failed.reason;
     const visible = this.ocean.group.visible;
     const underwaterVisible = this.underwater.group.visible;
@@ -293,7 +297,9 @@ export class PortfolioScene {
     const visitorVisibility = visitors.map((v) => v.visible);
     visitors.forEach((v) => (v.visible = true));
     try {
-      await this.renderer.compileAsync(this.scene, this.camera);
+      await run("shaders", () =>
+        this.renderer.compileAsync(this.scene, this.camera),
+      );
     } finally {
       this.ocean.group.visible = visible;
       this.underwater.group.visible = underwaterVisible;
@@ -470,8 +476,14 @@ export class PortfolioScene {
   }
   render() {
     if (document.hidden) return;
-    renderBudget.sample(performance.now(), !this.entered || this.orbitalActive || this.waterMotion.push.pass.enabled);
-    const finishProfile = profileFrame(this.renderer, `${this.page}:${this.workDepth > .8 ? "seabed" : this.workDepth > .05 ? "descent" : "surface"}`);
+    renderBudget.sample(
+      performance.now(),
+      !this.entered || this.orbitalActive || this.waterMotion.push.pass.enabled,
+    );
+    const finishProfile = profileFrame(
+      this.renderer,
+      `${this.page}:${this.workDepth > 0.8 ? "seabed" : this.workDepth > 0.05 ? "descent" : "surface"}`,
+    );
     this.clock.update();
     const delta = Math.min(this.clock.getDelta(), 0.05);
     this.timeCheck += delta;
@@ -507,7 +519,10 @@ export class PortfolioScene {
       this.underwater.update(t, delta * motion, this.smoothPointer);
     const mobile = innerWidth < 650,
       inGallery = this.page === "gallery";
-    const renderView = this.page === "work" ? submergedView(this.view, this.workDepth) : this.view;
+    const renderView =
+      this.page === "work"
+        ? submergedView(this.view, this.workDepth)
+        : this.view;
     applyCameraView(this.camera, renderView, this.page, this.smoothPointer, {
       mobile,
       reduced: this.reduced,

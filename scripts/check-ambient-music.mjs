@@ -364,3 +364,49 @@ assert.equal(
 console.log(
   "Scene audio checks passed: PCM seams/headroom, preload race, routing, crossfade, cues, mute, and direct entry.",
 );
+
+// FLAC transfer failure and Web Audio decode failure are separate fallback paths.
+const requested = [];
+globalThis.fetch = async (url) => {
+  requested.push(url);
+  return {
+    ok: !url.includes("tidal-notes.flac"),
+    arrayBuffer: async () =>
+      new Uint8Array([url.includes(".flac") ? 1 : 2, 0, 0, 0]).buffer,
+  };
+};
+const compressed =
+  await import("../src/ambient-music.js?compressed-fallback-test");
+const preparedBytes = await compressed.prepareSceneAudio();
+assert(
+  requested.some((url) => url.includes("tidal-notes.wav")),
+  "Missing FLAC uses the WAV master",
+);
+assert.equal(preparedBytes.sea.byteLength, 4);
+const legacy = new compressed.AmbientMusic("gallery");
+const decode = legacy.context.decodeAudioData.bind(legacy.context);
+legacy.context.decodeAudioData = async (bytes) => {
+  if (new Uint8Array(bytes)[0] === 1)
+    throw Error("FLAC unsupported by this decoder");
+  return decode(bytes);
+};
+await legacy.setEnabled(true);
+assert(
+  legacy.sources.sea && legacy.sources.space,
+  "Unsupported FLAC decoding still starts both loop sources",
+);
+for (const name of ["distant-orbit", "water-entry", "water-emerge"])
+  assert(requested.some((url) => url.includes(`${name}.wav`)));
+const requestCount = requested.length;
+await legacy.setEnabled(false);
+await legacy.setEnabled(true);
+assert.equal(
+  requested.length,
+  requestCount,
+  "Mute/unmute reuses decoded fallback audio",
+);
+await legacy.setEnabled(false);
+clearTimeout(legacy.suspendTimer);
+console.log(
+  "FLAC checks passed: network fallback, decoder fallback, and mute/unmute cache.",
+);

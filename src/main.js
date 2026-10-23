@@ -11,12 +11,14 @@ import { bindTimeControl, timeControlMarkup } from "./time-control.js";
 import { AmbientMusic, prepareSceneAudio } from "./ambient-music.js";
 import { waterVeil } from "./water-veil.js";
 import { mountLoadingGame } from "./loading-game.js";
+import { StartupProgress, yieldToBrowser } from "./startup-progress.js";
 
 let timeControl;
 let scene;
 let sceneUnavailable = false;
 let entered = false;
 let experienceReady = false;
+let startupProgress;
 let menuOpen = false;
 let activeFilter = "All";
 let soundOn = false;
@@ -423,14 +425,20 @@ function renderCards() {
     );
 }
 function updateGalleryProgress(value, label) {
+  startupProgress?.update("work", value);
+}
+function renderStartupProgress({ value, label, elapsed, done, total }) {
   const progress = document.querySelector(".intro-progress");
   if (!progress) return;
-  const progressValue = experienceReady ? 1 : value * 0.92;
-  const percent = Math.round(progressValue * 100);
-  progress.style.setProperty("--progress", progressValue);
+  const percent = Math.floor(value * 100);
+  progress.style.setProperty("--progress", value);
   progress.setAttribute("aria-valuenow", String(percent));
+  progress.setAttribute(
+    "aria-valuetext",
+    `${label}, ${done} of ${total} preparation steps complete`,
+  );
   document.querySelector(".intro-status").textContent =
-    `${value === 1 && !experienceReady ? "Preparing your sea" : label} · ${percent}%`;
+    `${label} · ${percent}%${!experienceReady && elapsed >= 3 ? ` · ${elapsed}s` : ""}`;
 }
 function openProject(id) {
   const p = projects.find((p) => p.id === id);
@@ -542,12 +550,22 @@ intro.setAttribute("aria-label", "Welcome to McLary");
 intro.innerHTML = `<div class="intro-inner"><div class="intro-symbol" aria-hidden="true">M.</div><h2>MCLARY</h2><p>${profile.introduction}</p><button class="pill" id="enter" disabled>Preparing your space</button><div class="intro-progress" role="progressbar" aria-label="Loading portfolio" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div><p class="intro-status" role="status">Loading your projects · 0%</p><button class="muted-entry" disabled>ENTER WITHOUT AUDIO</button></div><div class="loading-game" role="group" aria-label="海岸跳跃小游戏"></div>`;
 document.body.append(intro);
 const loadingGame = mountLoadingGame(intro.querySelector(".loading-game"));
+startupProgress = new StartupProgress(renderStartupProgress);
 async function start() {
-  // Fetch only: creating/resuming an AudioContext still requires the sound gesture.
-  prepareSceneAudio().catch((error) =>
-    console.warn("Audio preload unavailable", error),
+  const progressTimer = setInterval(() => startupProgress.emit(), 1000);
+  const fontsPrepared = startupProgress.run(
+    "fonts",
+    () => document.fonts.ready,
   );
   const galleryPrepared = prepareWork();
+  let audioPrepared;
+  const prepareAudio = () => {
+    audioPrepared ??= startupProgress
+      .run("audio", (report) => prepareSceneAudio(report))
+      .catch((error) => console.warn("Audio preload unavailable", error));
+  };
+  startupProgress.update("setup", 0);
+  await yieldToBrowser();
   try {
     scene = new PortfolioScene(document.querySelector("#scene"));
     document.querySelector("main").classList.remove("contact-fallback");
@@ -579,16 +597,42 @@ async function start() {
     if (page() === "contact")
       document.querySelector("main").classList.add("contact-fallback");
   }
+  startupProgress.update("setup", 1);
   await Promise.all([
-    document.fonts.ready,
+    fontsPrepared,
     galleryPrepared,
     scene
-      ?.prepare()
+      ?.prepare(startupProgress, async () => {
+        await Promise.all([fontsPrepared, galleryPrepared]);
+        prepareAudio();
+      })
       .catch((error) => console.warn("Scene preparation unavailable", error)),
   ]);
-  if (scene) orbital.prepare(scene);
+  // Also handles the existing no-WebGL fallback. No scene is deferred past entry.
+  prepareAudio();
+  await Promise.all([
+    audioPrepared,
+    startupProgress.run("transition", () =>
+      scene ? orbital.prepare(scene) : undefined,
+    ),
+  ]);
   experienceReady = true;
-  updateGalleryProgress(1, "Your space is ready");
+  clearInterval(progressTimer);
+  const report = startupProgress.finish();
+  // Local diagnostics: no telemetry upload. Resource durations include network/cache;
+  // stage durations also include decode, texture upload and GPU preparation.
+  report.resources = performance
+    .getEntriesByType("resource")
+    .filter((r) => /\/(earth|models|textures|audio|photography)\//.test(r.name))
+    .map((r) => ({
+      path: new URL(r.name).pathname,
+      durationMs: Math.round(r.duration),
+      transferBytes: r.transferSize,
+      decodedBytes: r.decodedBodySize,
+    }));
+  document.documentElement.dataset.startupProfile = JSON.stringify(report);
+  if (new URLSearchParams(location.search).has("profile"))
+    console.info("STARTUP " + JSON.stringify(report));
   intro.dataset.loading = "false";
   document.querySelector("#enter").disabled = false;
   document.querySelector("#enter").innerHTML = "Enter " + icon;
