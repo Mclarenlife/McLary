@@ -11,7 +11,7 @@ async function walk(dir) {
   ).flat();
 }
 const files = await walk("build");
-for (const route of ["", "work/", "contact/", "gallery/"])
+for (const route of ["", "work/", "contact/", "gallery/", "collection/"])
   if (!files.includes(path.join("build", route, "index.html")))
     issues.push(`Missing route: ${route}`);
 for (const file of files) {
@@ -29,7 +29,7 @@ for (const m of html.matchAll(/(?:src|href)="(\/[^"#?]+)"/g))
     issues.push(`Missing resource: ${m[1]}`);
 console.log(
   JSON.stringify(
-    { routes: 4, files: files.length, originalSiteReferences: 0, issues },
+    { routes: 5, files: files.length, originalSiteReferences: 0, issues },
     null,
     2,
   ),

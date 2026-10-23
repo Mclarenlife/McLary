@@ -36,3 +36,4 @@ for (const entry of ["index.html", "assets", "css", "js"]) {
 console.log("B&W included at /bw/.");
 
 await import("./build-texite.mjs");
+await import("./build-collection.mjs");

@@ -14,9 +14,20 @@ export const profile = {
 // Published projects in the portfolio.
 export const projects = [
   {
+    id: "collection",
+    title: "McLary’s APP Collection",
+    category: "APPs",
+    year: "2026",
+    color: "#e8e8e2",
+    image: "/covers/collection.webp",
+    url: "/collection/",
+    subtitle: "Four apps. One creative collection.",
+    description: "A playful collection of Texite, Paperead, Chartelis and Zipite. Explore independent tools for writing, reading and working with your own files.",
+  },
+  {
     id: "texite",
     title: "Texite",
-    category: "Digital",
+    category: "APPs",
     year: "2026",
     color: "#f6f5ef",
     image: "/covers/texite.webp",
@@ -27,7 +38,7 @@ export const projects = [
   {
     id: "files-archive",
     title: "McLary’s Files",
-    category: "Digital",
+    category: "Docs",
     year: "2026",
     color: "#eae6db",
     image: "/covers/files-archive.webp",
@@ -38,7 +49,7 @@ export const projects = [
   {
     id: "bw-toolbox",
     title: "B&W — 文件工具箱",
-    category: "Digital",
+    category: "Tools",
     year: "2026",
     color: "#efeee9",
     image: "/covers/bw-toolbox.webp",
